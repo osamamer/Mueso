@@ -30,6 +30,9 @@ import androidx.media3.session.SessionToken
 import coil.ImageLoader
 import coil.request.ImageRequest
 import com.akshay.musicplayer.data.remote.OnlineMusicRepository
+import com.akshay.musicplayer.data.BlacklistManager
+import com.akshay.musicplayer.media.service.SkipAttemptGate
+import com.akshay.musicplayer.media.service.SkipRefusalFeedback
 import com.akshay.musicplayer.domain.models.TrackEntity
 import com.akshay.musicplayer.media.service.MusicPlayerService
 import com.akshay.musicplayer.ui.state.PlaybackState
@@ -87,6 +90,8 @@ class ExoPlayerController(private val context: Context) : MediaPlayerController 
     private val mainHandler = Handler(Looper.getMainLooper())
     private var pendingTrackEndedRunnable: Runnable? = null
     private val onlineRepo = OnlineMusicRepository()
+    private var blacklistMonitorJob: Job? = null
+    private var lastBlockedScheduledTrackId: Long? = null
 
     @Volatile private var isWaitingForNetwork: Boolean = false
     private var pendingNetworkRetryTrack: TrackEntity? = null
@@ -260,6 +265,17 @@ class ExoPlayerController(private val context: Context) : MediaPlayerController 
             if (newIndex >= 0) {
                 currentQueueIndex = newIndex
                 val currentTrack = tracksQueue[newIndex]
+                if (isTrackBlacklisted(currentTrack)) {
+                    val allowedIndex = findNextAllowedQueueIndex(newIndex + 1)
+                    if (allowedIndex != null) {
+                        Log.i("MUESO_BLACKLIST", "Skipping blocked track '${currentTrack.title}' during queue transition")
+                        seekToIndex(allowedIndex)
+                    } else {
+                        pause()
+                        android.widget.Toast.makeText(context, "No unblocked tracks are available in this queue.", android.widget.Toast.LENGTH_SHORT).show()
+                    }
+                    return
+                }
                 if (reason == Player.MEDIA_ITEM_TRANSITION_REASON_AUTO && isOnlineTrack(currentTrack) && !isPlayingLosslessOnline && !isPlayingDirectOnline) {
                     Log.d("MUESO_SYNC", "ExoPlayer transitioned into online track '${currentTrack.title}'. Handing off to online player.")
                     seekToIndex(newIndex)
@@ -346,8 +362,8 @@ class ExoPlayerController(private val context: Context) : MediaPlayerController 
                 }
 
                 Log.w("MUESO_SYNC", "ExoPlayer retries exhausted on '${curTrack.title}'. Checking next track in queue...")
-                val nextIdx = currentQueueIndex + 1
-                if (nextIdx in tracksQueue.indices) {
+                val nextIdx = findNextAllowedQueueIndex(currentQueueIndex + 1)
+                if (nextIdx != null) {
                     Log.i("MUESO_SYNC", "Auto-advancing to next track at index $nextIdx after error on '${curTrack.title}'")
                     scope.launch(Dispatchers.Main) {
                         seekToIndex(nextIdx)
@@ -1121,6 +1137,27 @@ class ExoPlayerController(private val context: Context) : MediaPlayerController 
     init {
         // Initialize the online YouTube player
         ytPlayerManager.initialize()
+        blacklistMonitorJob = scope.launch(Dispatchers.Main) {
+            while (isActive) {
+                val isCurrentlyPlaying = isPlayingOnline || mediaController?.isPlaying == true
+                delay(if (isCurrentlyPlaying) 1_000L else 5_000L)
+                val track = currentOnlineTrack ?: tracksQueue.getOrNull(currentQueueIndex)
+                if (track != null && isTrackBlacklisted(track)) {
+                    if (lastBlockedScheduledTrackId != track.id) {
+                        lastBlockedScheduledTrackId = track.id
+                        val allowedIndex = findNextAllowedQueueIndex(currentQueueIndex + 1)
+                        if (allowedIndex != null) {
+                            Log.i("MUESO_BLACKLIST", "Daily blacklist window started; moving past '${track.title}'")
+                            seekToIndex(allowedIndex)
+                        } else {
+                            pause()
+                        }
+                    }
+                } else {
+                    lastBlockedScheduledTrackId = null
+                }
+            }
+        }
 
         ytPlayerManager.onStateChanged = { playing ->
             if (isPlayingOnline) {
@@ -1211,10 +1248,38 @@ class ExoPlayerController(private val context: Context) : MediaPlayerController 
         }
 
         com.akshay.musicplayer.media.service.MediaSessionBridge.onNextRequested = {
-            mainHandler.post { seekToNext() }
+            mainHandler.post {
+                val viewModelHandler = com.akshay.musicplayer.media.service.MediaSessionBridge.onUserNextRequested
+                if (viewModelHandler != null) {
+                    viewModelHandler.invoke()
+                } else {
+                    val current = currentOnlineTrack ?: tracksQueue.getOrNull(currentQueueIndex)
+                    val currentKey = current?.id?.toString().orEmpty()
+                    if (SkipAttemptGate.shouldRefuse(currentKey, _playbackState.value.currentPositionMs, _playbackState.value.durationMs)) {
+                        SkipRefusalFeedback.playTone(context)
+                        com.akshay.musicplayer.media.service.MediaSessionBridge.onSkipRefused?.invoke()
+                        return@post
+                    }
+
+                    seekToNext()
+                }
+            }
         }
         com.akshay.musicplayer.media.service.MediaSessionBridge.onPreviousRequested = {
-            mainHandler.post { seekToPrevious() }
+            mainHandler.post {
+                val viewModelHandler = com.akshay.musicplayer.media.service.MediaSessionBridge.onUserPreviousRequested
+                if (viewModelHandler != null) {
+                    viewModelHandler.invoke()
+                } else {
+                    val current = currentOnlineTrack ?: tracksQueue.getOrNull(currentQueueIndex)
+                    if (SkipAttemptGate.shouldRefuse(current?.id?.toString().orEmpty(), _playbackState.value.currentPositionMs, _playbackState.value.durationMs)) {
+                        SkipRefusalFeedback.playTone(context)
+                        com.akshay.musicplayer.media.service.MediaSessionBridge.onSkipRefused?.invoke()
+                        return@post
+                    }
+                    seekToPrevious()
+                }
+            }
         }
         com.akshay.musicplayer.media.service.MediaSessionBridge.onPlayRequested = {
             mainHandler.post {
@@ -1721,15 +1786,31 @@ class ExoPlayerController(private val context: Context) : MediaPlayerController 
     }
 
     override fun seekToNext() {
-        val nextIndex = currentQueueIndex + 1
-        if (nextIndex in tracksQueue.indices) {
+        val nextIndex = findNextAllowedQueueIndex(currentQueueIndex + 1)
+        if (nextIndex != null) {
             seekToIndex(nextIndex)
-        } else if (getRepeatMode() == Player.REPEAT_MODE_ALL && tracksQueue.isNotEmpty()) {
-            seekToIndex(0)
         } else {
             Log.d("MUESO_SYNC", "Reached end of playlist in seekToNext, pausing.")
             pause()
         }
+    }
+
+    private fun isTrackBlacklisted(track: TrackEntity): Boolean =
+        BlacklistManager(context.getSharedPreferences("mueso_prefs", Context.MODE_PRIVATE)).isBlocked(track)
+
+    private fun findNextAllowedQueueIndex(startIndex: Int): Int? {
+        if (tracksQueue.isEmpty()) return null
+        val blacklist = BlacklistManager(context.getSharedPreferences("mueso_prefs", Context.MODE_PRIVATE))
+        val firstPass = (startIndex.coerceAtLeast(0)..tracksQueue.lastIndex).firstOrNull { index ->
+            !blacklist.isBlocked(tracksQueue[index])
+        }
+        if (firstPass != null) return firstPass
+        if (getRepeatMode() == Player.REPEAT_MODE_ALL) {
+            return (0 until startIndex.coerceAtMost(tracksQueue.size)).firstOrNull { index ->
+                !blacklist.isBlocked(tracksQueue[index])
+            }
+        }
+        return null
     }
 
     override fun seekToPrevious() {
@@ -1892,7 +1973,10 @@ class ExoPlayerController(private val context: Context) : MediaPlayerController 
     }
 
     override fun setShuffleEnabled(enabled: Boolean) {
-        mediaController?.shuffleModeEnabled = enabled
+        // The queue itself is reordered by PlayerViewModel when shuffling. ExoPlayer's own shuffle
+        // must stay off, or it plays the timeline in a random order and drops queued tracks into
+        // random positions.
+        mediaController?.shuffleModeEnabled = false
     }
 
     override fun moveQueueItem(fromIndex: Int, toIndex: Int) {
@@ -2252,6 +2336,8 @@ class ExoPlayerController(private val context: Context) : MediaPlayerController 
 
     override fun release() {
         if (!com.akshay.musicplayer.media.service.MediaSessionBridge.isServiceRunning) {
+            blacklistMonitorJob?.cancel()
+            blacklistMonitorJob = null
             com.akshay.musicplayer.media.service.MediaSessionBridge.onNextRequested = null
             com.akshay.musicplayer.media.service.MediaSessionBridge.onPreviousRequested = null
             com.akshay.musicplayer.media.service.MediaSessionBridge.onPlayRequested = null

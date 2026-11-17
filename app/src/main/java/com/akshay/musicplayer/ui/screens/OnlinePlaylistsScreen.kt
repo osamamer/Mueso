@@ -1024,6 +1024,8 @@ fun OnlinePlaylistsScreen(
                 val custom = customOnlinePlaylists.find { it.id == selectedCustomPlaylist?.id } ?: selectedCustomPlaylist!!
                 val flow = remember(custom.id) { viewModel.getOnlinePlaylistTracks(custom.id) }
                 val tracks by flow.collectAsState(initial = emptyList())
+                val addedDates by remember(custom.id) { viewModel.getOnlinePlaylistTrackAddedDates(custom.id) }
+                    .collectAsState(initial = emptyMap())
 
                 OnlinePlaylistDetailScreen(
                     title = custom.name,
@@ -1079,6 +1081,14 @@ fun OnlinePlaylistsScreen(
                         viewModel.playOnlinePlaylist(tracks, index)
                         selectedCustomPlaylist = null
                         onNavigateToPlayer()
+                    },
+                    sortKey = "mueso_${custom.id}",
+                    addedDates = addedDates,
+                    onPlayTracks = { shown, index ->
+                        if (viewModel.playOnlinePlaylist(shown, index)) {
+                            selectedCustomPlaylist = null
+                            onNavigateToPlayer()
+                        }
                     },
                     onRemoveTrack = { track: TrackEntity ->
                         viewModel.removeTrackFromOnlinePlaylist(custom.id, track.id)

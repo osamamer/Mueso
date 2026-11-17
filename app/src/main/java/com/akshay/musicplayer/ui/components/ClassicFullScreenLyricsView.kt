@@ -104,6 +104,7 @@ fun ClassicFullScreenLyricsView(
     val adjustedPositionMs = (currentPosMs + lyricsOffsetMs).coerceAtLeast(0L)
 
     val lyrics = track.lyrics
+    val lyricsRtl = rememberLyricsRtl(lyrics)
     val hasSyncedLines = lyrics != null && lyrics.lines.isNotEmpty()
     val hasPlainText = lyrics != null && !lyrics.rawText.isNullOrBlank() && !lyrics.rawText.equals("null", ignoreCase = true)
 
@@ -534,13 +535,13 @@ fun ClassicFullScreenLyricsView(
                                 letterSpacing = if (isActive) (-0.3).sp else 0.sp,
                                 color = if (isActive) textPrimary else textSecondary.copy(alpha = animatedAlpha),
                                 fontWeight = if (isActive) FontWeight.ExtraBold else FontWeight.Medium,
-                                textAlign = TextAlign.Start,
+                                textAlign = lyricsTextAlign(lyricsRtl),
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .graphicsLayer {
                                         scaleX = animatedScale
                                         scaleY = animatedScale
-                                        transformOrigin = TransformOrigin(0f, 0.5f)
+                                        transformOrigin = TransformOrigin(if (lyricsRtl) 1f else 0f, 0.5f)
                                     }
                                     .clip(RoundedCornerShape(8.dp))
                                     .clickable { viewModel.seekTo(line.timestampMs) }
@@ -582,7 +583,9 @@ fun ClassicFullScreenLyricsView(
                                     fontSize = 16.sp,
                                     lineHeight = 24.sp,
                                     color = textPrimary,
-                                    fontWeight = FontWeight.Medium
+                                    fontWeight = FontWeight.Medium,
+                                    textAlign = lyricsTextAlign(lyricsRtl),
+                                    modifier = Modifier.fillMaxWidth()
                                 )
                             }
                         }

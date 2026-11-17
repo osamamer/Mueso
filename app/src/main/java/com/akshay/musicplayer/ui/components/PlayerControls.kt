@@ -40,7 +40,8 @@ fun PlayerControls(
     onPlayPauseClick: () -> Unit,
     onNextClick: () -> Unit,
     onPreviousClick: () -> Unit,
-    onSeek: (Long) -> Unit,
+    /** Returns false if the seek was refused (e.g. no rewinds left). */
+    onSeek: (Long) -> Boolean,
     isResolvingTrack: Boolean = false,
     playButtonPosition: String = "Left",
     modifier: Modifier = Modifier
@@ -84,7 +85,11 @@ fun PlayerControls(
                 sliderPosition = it
             },
             onValueChangeFinished = {
-                onSeek(sliderPosition.toLong())
+                if (!onSeek(sliderPosition.toLong())) {
+                    // Refused: snap the thumb back to where playback actually is.
+                    isSeeking = false
+                    sliderPosition = playbackState.currentPositionMs.toFloat()
+                }
             },
             valueRange = 0f..playbackState.durationMs.toFloat().coerceAtLeast(1f),
             modifier = sliderModifier,

@@ -3,6 +3,26 @@
 package com.akshay.musicplayer.ui.screens
 
 import android.content.Context
+import androidx.compose.animation.core.Animatable
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Velocity
+import com.akshay.musicplayer.ui.components.PlayerLyricsCard
+import com.akshay.musicplayer.ui.components.UpNextCard
+import com.akshay.musicplayer.ui.components.swipeToSkip
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
@@ -153,31 +173,74 @@ fun ClassicPlayerScreen(
     val currentPosMs = if (isDraggingSlider) dragSliderValue.toLong() else playbackState.currentPositionMs
     val durationMs = playbackState.durationMs.coerceAtLeast(1L)
 
+    // Scrollable page: player on top, lyrics + queue below (Spotify style).
+    val pageScrollState = rememberScrollState()
+    val coroutineScope = rememberCoroutineScope()
+    val density = LocalDensity.current
+    val collapseThresholdPx = with(density) { 90.dp.toPx() }
+    val latestCollapse by rememberUpdatedState(onCollapseClick)
+    val pullDownToCollapse = remember(collapseThresholdPx) {
+        object : NestedScrollConnection {
+            var pulled = 0f
+            override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset {
+                if (source == NestedScrollSource.UserInput && available.y > 0f) {
+                    // Already at the top and still dragging down → collapse the player
+                    pulled += available.y
+                    if (pulled > collapseThresholdPx) {
+                        pulled = 0f
+                        latestCollapse()
+                    }
+                    return Offset(0f, available.y)
+                }
+                if (consumed.y != 0f || available.y < 0f) pulled = 0f
+                return Offset.Zero
+            }
+
+            override suspend fun onPreFling(available: Velocity): Velocity {
+                pulled = 0f
+                return Velocity.Zero
+            }
+        }
+    }
+    val artSwipeOffset = remember { Animatable(0f) }
+
+    // Upcoming tracks for the "Next in queue" card
+    val currentQueueIndex = activeQueue.indexOfFirst { it.id == playbackState.currentTrackId }
+    val upcomingTracks = remember(activeQueue, currentQueueIndex) {
+        if (currentQueueIndex < 0) emptyList()
+        else activeQueue.withIndex()
+            .drop(currentQueueIndex + 1)
+            .take(4)
+            .map { it.index to it.value }
+    }
+
     Box(
         modifier = modifier
             .fillMaxSize()
             .background(bgColor)
-            .pointerInput(Unit) {
-                detectVerticalDragGestures(
-                    onVerticalDrag = { change, dragAmount ->
-                        if (dragAmount > 15f) {
-                            change.consume()
-                            onCollapseClick()
-                        }
-                    }
-                )
-            }
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
                 onClick = { /* Intercept and consume unhandled taps so they never leak through */ }
             )
     ) {
+      BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+        val viewportHeight = maxHeight
+        val navBarBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+        // How much of the lyrics card peeks above the bottom edge, hinting "scroll for more"
+        val peekHeight = if (enableLyrics) 46.dp else 0.dp
+
         Column(
             modifier = Modifier
                 .fillMaxSize()
+                .nestedScroll(pullDownToCollapse)
+                .verticalScroll(pageScrollState)
+        ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(viewportHeight - peekHeight - navBarBottom)
                 .statusBarsPadding()
-                .navigationBarsPadding()
                 .padding(horizontal = 24.dp)
         ) {
             // ─── 1. Top Navigation Bar ───
@@ -252,6 +315,16 @@ fun ClassicPlayerScreen(
                     modifier = Modifier
                         .fillMaxWidth(0.92f)
                         .aspectRatio(1f)
+                        .graphicsLayer {
+                            translationX = artSwipeOffset.value
+                            alpha = 1f - (kotlin.math.abs(artSwipeOffset.value) / (size.width.coerceAtLeast(1f) * 1.4f)).coerceIn(0f, 0.7f)
+                        }
+                        .swipeToSkip(
+                            offsetX = artSwipeOffset,
+                            onNext = { viewModel.playNextTrack() },
+                            onPrevious = { viewModel.playPreviousTrack() },
+                            scope = coroutineScope
+                        )
                         .shadow(20.dp, RoundedCornerShape(artCorner), ambientColor = accent.copy(alpha = 0.25f), spotColor = accent.copy(alpha = 0.35f))
                         .clip(RoundedCornerShape(artCorner))
                         .background(if (isDarkMode) Color(0xFF1E1E28) else Color.LightGray)
@@ -527,6 +600,42 @@ fun ClassicPlayerScreen(
             }
         }
 
+        // ─── Below the fold: Lyrics card + Next in queue (scroll down to reveal) ───
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            if (enableLyrics) {
+                PlayerLyricsCard(
+                    track = track,
+                    positionMs = playbackState.currentPositionMs,
+                    lyricsOffsetMs = lyricsOffsetMs,
+                    status = trackLyricsStatus,
+                    accent = accent,
+                    isDarkMode = isDarkMode,
+                    onExpand = { isLyricsVisible = true }
+                )
+            }
+
+            UpNextCard(
+                upcoming = upcomingTracks,
+                isDarkMode = isDarkMode,
+                onTrackClick = { index -> viewModel.requestPlayTrackAtIndex(index) },
+                onOpenQueue = { showQueueSheet = true }
+            )
+
+            Spacer(modifier = Modifier.height(navBarBottom + 24.dp))
+        }
+        }
+
+        // Back to the top whenever the song changes, like Spotify
+        LaunchedEffect(track.id) {
+            if (pageScrollState.value > 0) pageScrollState.animateScrollTo(0)
+        }
+      }
+
         // ─── Full-Screen Synced Lyrics Overlay ───
         androidx.compose.animation.AnimatedVisibility(
             visible = isLyricsVisible,
@@ -601,7 +710,7 @@ fun ClassicPlayerScreen(
             playlistTrackCount = playlistTrackCount,
             isDarkMode = isDarkMode,
             onTrackClick = { index ->
-                viewModel.playTrackAtIndex(index)
+                viewModel.requestPlayTrackAtIndex(index)
                 showQueueSheet = false
             },
             onMove = { from, to -> viewModel.moveInQueue(from, to) },

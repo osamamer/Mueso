@@ -2,6 +2,8 @@ package com.akshay.musicplayer.ui.screens
 
 import androidx.compose.animation.*
 import androidx.compose.animation.core.tween
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -55,6 +57,7 @@ fun SpotifyImportScreen(
     val matchProgress by viewModel.spotifyMatchProgress.collectAsState()
     val errorMessage by viewModel.spotifyErrorMessage.collectAsState()
     val spotifyCreatedDestination by viewModel.spotifyCreatedDestination.collectAsState()
+    val bulkImportProgress by viewModel.spotifyBulkImportProgress.collectAsState()
     val syncTargetPlaylistName by viewModel.spotifySyncTargetPlaylistName.collectAsState()
     val isSyncMode = viewModel.spotifyIsSyncMode
     val previewingTrackId by viewModel.previewingTrackId.collectAsState()
@@ -72,6 +75,20 @@ fun SpotifyImportScreen(
     val dividerColor = if (isPureBlack) Color.White.copy(alpha = 0.06f) else if (isDarkMode) Color.White.copy(alpha = 0.08f) else Color.Black.copy(alpha = 0.08f)
 
     val context = androidx.compose.ui.platform.LocalContext.current
+    val jsonImportLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri != null) viewModel.importSpotifyPlaylistsFromJson(context, uri)
+    }
+
+    val metadataRefresh by viewModel.spotifyMetadataRefresh.collectAsState()
+    val savedSpotifyClientId by viewModel.spotifyClientId.collectAsState()
+    var spotifyClientIdInput by androidx.compose.runtime.saveable.rememberSaveable(savedSpotifyClientId) { mutableStateOf(savedSpotifyClientId) }
+    val metadataRefreshLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri != null) viewModel.refreshSpotifyPlaylistsFromJson(context, uri)
+    }
 
     val handleBack = {
         viewModel.stopSpotifyPreview()
@@ -347,7 +364,10 @@ fun SpotifyImportScreen(
                                 Text("Spotify Playlist URL", color = textPrimary, fontSize = 15.sp, fontWeight = FontWeight.Bold)
                                 Text("Paste a public Spotify playlist link", color = textSub, fontSize = 12.sp)
                             }
-                            if (importState == SpotifyImportState.Ready || importState == SpotifyImportState.Done) {
+                            if (importState == SpotifyImportState.Ready ||
+                                importState == SpotifyImportState.Done ||
+                                importState == SpotifyImportState.BulkImportDone
+                            ) {
                                 TextButton(onClick = {
                                     viewModel.resetSpotifyImport()
                                     spotifyUrl = ""
@@ -392,11 +412,17 @@ fun SpotifyImportScreen(
                         )
 
                         // Import / Cancel Button
-                        val isRunning = importState == SpotifyImportState.FetchingSpotify || importState == SpotifyImportState.MatchingTracks
+                        val isRunning = importState == SpotifyImportState.FetchingSpotify ||
+                            importState == SpotifyImportState.MatchingTracks ||
+                            importState == SpotifyImportState.BulkImporting
                         Button(
                             onClick = {
                                 if (isRunning) {
-                                    viewModel.resetSpotifyImport()
+                                    if (importState == SpotifyImportState.BulkImporting) {
+                                        viewModel.cancelSpotifyBulkImport()
+                                    } else {
+                                        viewModel.resetSpotifyImport()
+                                    }
                                 } else {
                                     viewModel.fetchSpotifyPlaylist(context, spotifyUrl)
                                 }
@@ -411,11 +437,143 @@ fun SpotifyImportScreen(
                             if (isRunning) {
                                 Icon(Icons.Default.Close, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
                                 Spacer(modifier = Modifier.width(8.dp))
-                                Text("Cancel Import", color = Color.White, fontWeight = FontWeight.Bold)
+                                Text(if (importState == SpotifyImportState.BulkImporting) "Cancel JSON Import" else "Cancel Import", color = Color.White, fontWeight = FontWeight.Bold)
                             } else {
                                 Icon(Icons.Default.Download, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Text("Import Playlist", color = Color.White, fontWeight = FontWeight.Bold)
+                            }
+                        }
+
+                        HorizontalDivider(color = dividerColor)
+
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text("Have a Spotify playlist export?", color = textPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                            Text(
+                                "Choose a JSON file to import all its playlists. Mueso will find matching songs in its online catalog.",
+                                color = textSub,
+                                fontSize = 12.sp
+                            )
+                            OutlinedButton(
+                                onClick = { jsonImportLauncher.launch(arrayOf("application/json", "text/*")) },
+                                enabled = !isRunning,
+                                shape = RoundedCornerShape(12.dp),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Icon(Icons.Default.FolderOpen, contentDescription = null, modifier = Modifier.size(18.dp))
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("Choose Spotify JSON file", fontWeight = FontWeight.SemiBold)
+                            }
+                        }
+
+                        HorizontalDivider(color = dividerColor)
+
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text("Already imported?", color = textPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                            Text(
+                                "Pick the same JSON file to refetch playlist covers and order them by Spotify creation date. Songs aren't re-imported.",
+                                color = textSub,
+                                fontSize = 12.sp
+                            )
+                            OutlinedButton(
+                                onClick = {
+                                    viewModel.clearSpotifyMetadataRefreshMessage()
+                                    metadataRefreshLauncher.launch(arrayOf("application/json", "text/*"))
+                                },
+                                enabled = !isRunning && !metadataRefresh.isRunning,
+                                shape = RoundedCornerShape(12.dp),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                if (metadataRefresh.isRunning) {
+                                    CircularProgressIndicator(color = SpotifyGreen, modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                                } else {
+                                    Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
+                                }
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("Refresh covers & order", fontWeight = FontWeight.SemiBold)
+                            }
+                        }
+
+                        HorizontalDivider(color = dividerColor)
+
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text("Get covers by signing in to Spotify", color = textPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                            Text(
+                                "Sign in once and Mueso gives each imported playlist the cover of your Spotify playlist with the same name, private ones included. Songs aren't changed.",
+                                color = textSub,
+                                fontSize = 12.sp
+                            )
+                            Text(
+                                "One-time setup: create an app at developer.spotify.com/dashboard, add the redirect URI below, then paste the app's Client ID here.",
+                                color = textSub,
+                                fontSize = 12.sp
+                            )
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(if (isDarkMode) Color.White.copy(alpha = 0.06f) else Color.Black.copy(alpha = 0.04f))
+                                    .clickable {
+                                        val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                                        clipboard.setPrimaryClip(android.content.ClipData.newPlainText("Redirect URI", com.akshay.musicplayer.data.remote.SpotifyAuth.REDIRECT_URI))
+                                        android.widget.Toast.makeText(context, "Redirect URI copied", android.widget.Toast.LENGTH_SHORT).show()
+                                    }
+                                    .padding(horizontal = 14.dp, vertical = 12.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text("Redirect URI", color = textSub, fontSize = 11.sp)
+                                    Text(com.akshay.musicplayer.data.remote.SpotifyAuth.REDIRECT_URI, color = textPrimary, fontSize = 14.sp)
+                                }
+                                Icon(Icons.Default.ContentCopy, contentDescription = "Copy redirect URI", tint = textSub, modifier = Modifier.size(18.dp))
+                            }
+                            BasicTextField(
+                                value = spotifyClientIdInput,
+                                onValueChange = { spotifyClientIdInput = it.trim() },
+                                textStyle = TextStyle(color = textPrimary, fontSize = 14.sp),
+                                singleLine = true,
+                                cursorBrush = SolidColor(SpotifyGreen),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(if (isDarkMode) Color.White.copy(alpha = 0.06f) else Color.Black.copy(alpha = 0.04f))
+                                    .padding(horizontal = 14.dp, vertical = 14.dp),
+                                decorationBox = { innerTextField ->
+                                    Box {
+                                        if (spotifyClientIdInput.isEmpty()) {
+                                            Text(
+                                                "Spotify app Client ID",
+                                                color = textSub.copy(alpha = 0.5f),
+                                                fontSize = 14.sp
+                                            )
+                                        }
+                                        innerTextField()
+                                    }
+                                }
+                            )
+                            OutlinedButton(
+                                onClick = {
+                                    viewModel.clearSpotifyMetadataRefreshMessage()
+                                    viewModel.startSpotifyLogin(context, spotifyClientIdInput)
+                                },
+                                enabled = spotifyClientIdInput.isNotBlank() && !isRunning && !metadataRefresh.isRunning,
+                                shape = RoundedCornerShape(12.dp),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                if (metadataRefresh.isRunning) {
+                                    CircularProgressIndicator(color = SpotifyGreen, modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                                } else {
+                                    Icon(Icons.Default.Login, contentDescription = null, modifier = Modifier.size(18.dp))
+                                }
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("Sign in to Spotify & fetch covers", fontWeight = FontWeight.SemiBold)
+                            }
+                            metadataRefresh.message?.let { message ->
+                                Text(
+                                    message,
+                                    color = if (metadataRefresh.isError) Color(0xFFFF453A) else textSub,
+                                    fontSize = 12.sp
+                                )
                             }
                         }
                     }
@@ -441,6 +599,93 @@ fun SpotifyImportScreen(
                             Text("Import Failed", color = Color(0xFFFF453A), fontWeight = FontWeight.Bold, fontSize = 14.sp)
                         }
                         Text(errorMessage!!, color = textPrimary, fontSize = 13.sp)
+                    }
+                }
+            }
+
+            if (importState == SpotifyImportState.BulkImporting) {
+                item {
+                    val progress = if (bulkImportProgress.totalTracks > 0) {
+                        (bulkImportProgress.tracksProcessed.toFloat() / bulkImportProgress.totalTracks).coerceIn(0f, 1f)
+                    } else 0f
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(16.dp))
+                            .background(cardBg)
+                            .padding(18.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            CircularProgressIndicator(color = SpotifyGreen, modifier = Modifier.size(24.dp), strokeWidth = 3.dp)
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text("Importing Spotify playlists", color = textPrimary, fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                                Text(
+                                    "Playlist ${bulkImportProgress.currentPlaylistIndex.coerceAtLeast(1)} of ${bulkImportProgress.totalPlaylists}: ${bulkImportProgress.currentPlaylistName}",
+                                    color = textSub,
+                                    fontSize = 12.sp,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                        }
+                        LinearProgressIndicator(
+                            progress = { progress },
+                            modifier = Modifier.fillMaxWidth().height(4.dp).clip(RoundedCornerShape(2.dp)),
+                            color = SpotifyGreen,
+                            trackColor = if (isDarkMode) Color.White.copy(alpha = 0.08f) else Color.Black.copy(alpha = 0.06f)
+                        )
+                        Text(
+                            "${bulkImportProgress.tracksProcessed} of ${bulkImportProgress.totalTracks} songs checked · ${bulkImportProgress.matchedTracks} matched · ${bulkImportProgress.completedPlaylists} playlists saved",
+                            color = textSub,
+                            fontSize = 12.sp
+                        )
+                        Text("Large exports can take a while. Mueso saves each playlist when matching finishes.", color = textSub, fontSize = 11.sp)
+                    }
+                }
+            }
+
+            if (importState == SpotifyImportState.BulkImportDone) {
+                item {
+                    val wasCancelled = bulkImportProgress.isCancelled
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(16.dp))
+                            .background(SpotifyGreen.copy(alpha = 0.12f))
+                            .padding(20.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Icon(
+                            if (wasCancelled) Icons.Default.PauseCircle else Icons.Default.CheckCircle,
+                            contentDescription = null,
+                            tint = SpotifyGreen,
+                            modifier = Modifier.size(44.dp)
+                        )
+                        Text(if (wasCancelled) "Import stopped" else "Spotify playlists imported", color = textPrimary, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                        Text(
+                            if (wasCancelled) {
+                                "Stopped after checking ${bulkImportProgress.tracksProcessed} of ${bulkImportProgress.totalTracks} songs. ${bulkImportProgress.matchedTracks} matched and ${bulkImportProgress.unmatchedTracks} were unmatched. ${bulkImportProgress.completedPlaylists} playlists saved."
+                            } else {
+                                "${bulkImportProgress.completedPlaylists} playlists saved. ${bulkImportProgress.matchedTracks} of ${bulkImportProgress.totalTracks} songs matched; ${bulkImportProgress.unmatchedTracks} unmatched songs were left out."
+                            },
+                            color = textSub,
+                            fontSize = 13.sp,
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                        )
+                        if (wasCancelled) {
+                            Text("Every playlist counted above is saved. The playlist currently being matched is saved only if matching had finished when you cancelled.", color = textSub, fontSize = 12.sp, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                        }
+                        OutlinedButton(
+                            onClick = {
+                                viewModel.resetSpotifyImport()
+                                spotifyUrl = ""
+                            },
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Text("Import another file", color = textPrimary, fontWeight = FontWeight.SemiBold)
+                        }
                     }
                 }
             }

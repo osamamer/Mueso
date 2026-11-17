@@ -1,5 +1,6 @@
 package com.akshay.musicplayer.ui.screens
 
+import com.akshay.musicplayer.ui.components.SwipeToQueue
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
@@ -28,6 +29,7 @@ import androidx.compose.material.icons.automirrored.filled.PlaylistPlay
 import androidx.compose.material.icons.automirrored.filled.QueueMusic
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.LibraryMusic
@@ -35,6 +37,11 @@ import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.SortByAlpha
+import androidx.compose.material.icons.filled.SwapVert
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.*
@@ -54,6 +61,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.akshay.musicplayer.domain.models.TrackEntity
 import com.akshay.musicplayer.data.db.PlaylistEntity
+import com.akshay.musicplayer.data.db.OnlinePlaylistEntity
 import com.akshay.musicplayer.ui.state.PlayerUiState
 import com.akshay.musicplayer.ui.viewmodel.PlayerViewModel
 import com.akshay.musicplayer.util.PermissionHelper
@@ -80,7 +88,8 @@ private val SurfaceDark: Color
 fun OfflineLibraryScreen(
     viewModel: PlayerViewModel,
     onNavigateToPlayer: () -> Unit,
-    onPlaylistClick: (PlaylistEntity) -> Unit
+    onPlaylistClick: (PlaylistEntity) -> Unit,
+    onOnlinePlaylistClick: (OnlinePlaylistEntity) -> Unit
 ) {
     val context = LocalContext.current
     val sharedPreferences = remember(context) { context.getSharedPreferences("mueso_prefs", android.content.Context.MODE_PRIVATE) }
@@ -96,6 +105,7 @@ fun OfflineLibraryScreen(
     val selectedTab by viewModel.offlineLibraryTab.collectAsState()
     var trackToAdd by remember { mutableStateOf<TrackEntity?>(null) }
     val playlists by viewModel.playlists.collectAsState()
+    val onlinePlaylists by viewModel.onlinePlaylists.collectAsState()
     val isDarkMode by viewModel.isDarkMode.collectAsState()
     val playerLayoutStyle by viewModel.playerLayoutStyle.collectAsState()
     val playbackState by viewModel.playbackState.collectAsState()
@@ -221,7 +231,8 @@ fun OfflineLibraryScreen(
                         viewModel = viewModel,
                         isDarkMode = isDarkMode,
                         bottomPadding = bottomPadding,
-                        onPlaylistClick = onPlaylistClick
+                        onPlaylistClick = onPlaylistClick,
+                        onOnlinePlaylistClick = onOnlinePlaylistClick
                     )
                 }
             }
@@ -236,6 +247,7 @@ fun OfflineLibraryScreen(
                 onDismiss = { trackToAdd = null }
             )
         }
+
     }
 }
 
@@ -387,7 +399,7 @@ private fun AllSongsTab(
                                     fontWeight = FontWeight.Bold
                                 )
                                 Text(
-                                    text = "Mueso needs audio access permission to discover and play your local MP3s and downloaded music.",
+                                    text = "Mueso needs audio access to find songs saved in your selected Mueso download folder.",
                                     color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f),
                                     fontSize = 13.sp,
                                     textAlign = androidx.compose.ui.text.style.TextAlign.Center
@@ -431,7 +443,7 @@ private fun AllSongsTab(
                                     fontWeight = FontWeight.Bold
                                 )
                                 Text(
-                                    text = "Downloaded songs and local MP3s will appear here. Tap below after downloading.",
+                                    text = "Songs downloaded with Mueso to your selected folder will appear here.",
                                     color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f),
                                     fontSize = 13.sp,
                                     textAlign = androidx.compose.ui.text.style.TextAlign.Center
@@ -444,7 +456,7 @@ private fun AllSongsTab(
                                 ) {
                                     Icon(Icons.Default.Refresh, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
                                     Spacer(modifier = Modifier.width(8.dp))
-                                    Text("Rescan & Refresh Library", color = Color.White, fontWeight = FontWeight.Bold)
+                                    Text("Refresh Mueso Downloads", color = Color.White, fontWeight = FontWeight.Bold)
                                 }
                             }
                         }
@@ -455,14 +467,16 @@ private fun AllSongsTab(
                         contentPadding = PaddingValues(bottom = bottomPadding)
                     ) {
                         itemsIndexed(sortedTracks) { index, track ->
-                            TrackListItem(
-                                track = track,
-                                isDarkMode = isDarkMode,
-                                onClick = { onTrackClick(sortedTracks, index) },
-                                onAddToPlaylist = { onAddToPlaylist(track) },
-                                onRename = { trackToRename = track },
-                                onDelete = { trackToDelete = track }
-                            )
+                            SwipeToQueue(onAddToQueue = { viewModel.addToQueue(track) }, trackTitle = track.title) {
+                                TrackListItem(
+                                    track = track,
+                                    isDarkMode = isDarkMode,
+                                    onClick = { onTrackClick(sortedTracks, index) },
+                                    onAddToPlaylist = { onAddToPlaylist(track) },
+                                    onRename = { trackToRename = track },
+                                    onDelete = { trackToDelete = track }
+                                )
+                            }
                         }
                     }
                 }
@@ -506,7 +520,7 @@ private fun AllSongsTab(
                         fontWeight = FontWeight.Bold
                     )
                     Text(
-                        text = "Downloaded songs and local MP3s will appear here.\nTap below to scan your device.",
+                        text = "Songs downloaded with Mueso to your selected folder will appear here.\nTap below to refresh.",
                         color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f),
                         fontSize = 13.sp,
                         textAlign = androidx.compose.ui.text.style.TextAlign.Center
@@ -519,7 +533,7 @@ private fun AllSongsTab(
                     ) {
                         Icon(Icons.Default.Refresh, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text("Rescan & Refresh Library", color = Color.White, fontWeight = FontWeight.Bold)
+                        Text("Refresh Mueso Downloads", color = Color.White, fontWeight = FontWeight.Bold)
                     }
                 }
             }
@@ -860,13 +874,72 @@ fun TrackListItem(
 // ─── Playlists Tab ───────────────────────────────────────────
 
 @Composable
-private fun PlaylistsTab(
+internal fun PlaylistsTab(
     viewModel: PlayerViewModel,
     isDarkMode: Boolean = true,
     bottomPadding: Dp = 80.dp,
-    onPlaylistClick: (PlaylistEntity) -> Unit
+    onPlaylistClick: (PlaylistEntity) -> Unit,
+    onOnlinePlaylistClick: (OnlinePlaylistEntity) -> Unit
 ) {
+    val context = LocalContext.current
+    val sharedPreferences = remember(context) {
+        context.getSharedPreferences("mueso_prefs", android.content.Context.MODE_PRIVATE)
+    }
     val playlists by viewModel.playlists.collectAsState()
+    val onlinePlaylists by viewModel.onlinePlaylists.collectAsState()
+    var playlistSort by remember(sharedPreferences) {
+        // One-time switch of the existing default/custom order to Spotify-style Recents.
+        if (!sharedPreferences.getBoolean("playlist_sort_recents_migrated", false)) {
+            sharedPreferences.edit()
+                .putString("playlist_sort_option", PlaylistSortOption.RECENTS.name)
+                .putBoolean("playlist_sort_recents_migrated", true)
+                .apply()
+        }
+        mutableStateOf(
+            runCatching {
+                PlaylistSortOption.valueOf(
+                    sharedPreferences.getString("playlist_sort_option", PlaylistSortOption.RECENTS.name)
+                        ?: PlaylistSortOption.RECENTS.name
+                )
+            }.getOrDefault(PlaylistSortOption.RECENTS)
+        )
+    }
+    val sortedPlaylists = remember(playlists, playlistSort) {
+        playlists.sortedWith(
+            Comparator { left, right ->
+                val pinnedOrder = right.isPinned.compareTo(left.isPinned)
+                if (pinnedOrder != 0) pinnedOrder else when (playlistSort) {
+                    // Pinned keep their own order; everything else climbs by latest play/creation.
+                    PlaylistSortOption.RECENTS -> (if (left.isPinned) left.sortOrder.compareTo(right.sortOrder) else 0)
+                        .takeIf { it != 0 } ?: right.recentActivityAt.compareTo(left.recentActivityAt)
+                    PlaylistSortOption.DATE_ADDED -> right.dateCreated.compareTo(left.dateCreated)
+                    PlaylistSortOption.A_Z -> left.name.compareTo(right.name, ignoreCase = true)
+                    PlaylistSortOption.Z_A -> right.name.compareTo(left.name, ignoreCase = true)
+                    PlaylistSortOption.CUSTOM -> left.sortOrder.compareTo(right.sortOrder)
+                        .takeIf { it != 0 } ?: right.dateCreated.compareTo(left.dateCreated)
+                }
+            }
+        )
+    }
+    val sortedOnlinePlaylists = remember(onlinePlaylists, playlistSort) {
+        onlinePlaylists.sortedWith(
+            Comparator { left, right ->
+                val pinnedOrder = right.isPinned.compareTo(left.isPinned)
+                if (pinnedOrder != 0) pinnedOrder else when (playlistSort) {
+                    // Pinned keep their own order; everything else climbs by latest play/creation.
+                    PlaylistSortOption.RECENTS -> (if (left.isPinned) left.sortOrder.compareTo(right.sortOrder) else 0)
+                        .takeIf { it != 0 } ?: right.recentActivityAt.compareTo(left.recentActivityAt)
+                    PlaylistSortOption.DATE_ADDED -> right.dateCreated.compareTo(left.dateCreated)
+                    PlaylistSortOption.A_Z -> left.name.compareTo(right.name, ignoreCase = true)
+                    PlaylistSortOption.Z_A -> right.name.compareTo(left.name, ignoreCase = true)
+                    PlaylistSortOption.CUSTOM -> left.sortOrder.compareTo(right.sortOrder)
+                        .takeIf { it != 0 } ?: right.dateCreated.compareTo(left.dateCreated)
+                }
+            }
+        )
+    }
+    var isReorderingPlaylists by remember { mutableStateOf(false) }
+    if (playlistSort != PlaylistSortOption.CUSTOM && isReorderingPlaylists) isReorderingPlaylists = false
     var showCreateDialog by remember { mutableStateOf(false) }
     var renamePlaylist by remember { mutableStateOf<PlaylistEntity?>(null) }
 
@@ -894,7 +967,7 @@ private fun PlaylistsTab(
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
-        if (playlists.isEmpty()) {
+        if (playlists.isEmpty() && onlinePlaylists.isEmpty()) {
             // Empty state
             Column(
                 modifier = Modifier
@@ -938,14 +1011,40 @@ private fun PlaylistsTab(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 24.dp, vertical = 12.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "${playlists.size} playlists",
+                        text = "${playlists.size + onlinePlaylists.size} playlists",
                         color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f),
-                        fontSize = 14.sp
+                        fontSize = 14.sp,
+                        modifier = Modifier.weight(1f)
                     )
+                    PlaylistSortChip(
+                        currentSort = playlistSort,
+                        isDarkMode = isDarkMode,
+                        onSortChange = { newSort ->
+                            playlistSort = newSort
+                            sharedPreferences.edit().putString("playlist_sort_option", newSort.name).apply()
+                        }
+                    )
+                    IconButton(onClick = {
+                        if (isReorderingPlaylists) {
+                            isReorderingPlaylists = false
+                        } else {
+                            if (playlistSort != PlaylistSortOption.CUSTOM) {
+                                playlistSort = PlaylistSortOption.CUSTOM
+                                sharedPreferences.edit().putString("playlist_sort_option", PlaylistSortOption.CUSTOM.name).apply()
+                            }
+                            isReorderingPlaylists = true
+                        }
+                    }) {
+                        Icon(
+                            if (isReorderingPlaylists) Icons.Default.Check else Icons.Default.SwapVert,
+                            contentDescription = if (isReorderingPlaylists) "Done reordering" else "Reorder playlists",
+                            tint = AccentOrange
+                        )
+                    }
                     IconButton(onClick = { showCreateDialog = true }) {
                         Icon(
                             Icons.Default.Add,
@@ -960,18 +1059,257 @@ private fun PlaylistsTab(
                     contentPadding = PaddingValues(bottom = bottomPadding),
                     verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    items(playlists) { playlist ->
-                        PlaylistItem(
-                            playlist = playlist,
-                            isDarkMode = isDarkMode,
-                            onClick = { onPlaylistClick(playlist) },
-                            onRename = { renamePlaylist = playlist },
-                            onDelete = { viewModel.deletePlaylist(playlist.id) }
-                        )
+                    if (sortedOnlinePlaylists.isNotEmpty()) {
+                        item(key = "mueso_playlist_header") {
+                            Text(
+                                "Mueso Playlists",
+                                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.65f),
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                modifier = Modifier.padding(start = 22.dp, top = 8.dp, bottom = 4.dp)
+                            )
+                        }
+                        itemsIndexed(sortedOnlinePlaylists, key = { _, it -> "mueso_${it.id}" }) { index, playlist ->
+                            ReorderableRow(
+                                enabled = isReorderingPlaylists,
+                                canMoveUp = sortedOnlinePlaylists.getOrNull(index - 1)?.isPinned == playlist.isPinned,
+                                canMoveDown = sortedOnlinePlaylists.getOrNull(index + 1)?.isPinned == playlist.isPinned,
+                                onMove = { delta ->
+                                    viewModel.reorderOnlinePlaylists(
+                                        sortedOnlinePlaylists.map { it.id }.movedBy(index, delta)
+                                    )
+                                }
+                            ) {
+                                OnlinePlaylistItem(
+                                    playlist = playlist,
+                                    viewModel = viewModel,
+                                    isDarkMode = isDarkMode,
+                                    onClick = { if (!isReorderingPlaylists) onOnlinePlaylistClick(playlist) },
+                                    onTogglePin = { viewModel.setOnlinePlaylistPinned(playlist.id, !playlist.isPinned) }
+                                )
+                            }
+                        }
+                    }
+                    if (sortedPlaylists.isNotEmpty()) {
+                        item(key = "local_playlist_header") {
+                            Text(
+                                "Local Playlists",
+                                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.65f),
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                modifier = Modifier.padding(start = 22.dp, top = 8.dp, bottom = 4.dp)
+                            )
+                        }
+                    }
+                    itemsIndexed(sortedPlaylists, key = { _, it -> "local_${it.id}" }) { index, playlist ->
+                        ReorderableRow(
+                            enabled = isReorderingPlaylists,
+                            canMoveUp = sortedPlaylists.getOrNull(index - 1)?.isPinned == playlist.isPinned,
+                            canMoveDown = sortedPlaylists.getOrNull(index + 1)?.isPinned == playlist.isPinned,
+                            onMove = { delta ->
+                                viewModel.reorderPlaylists(sortedPlaylists.map { it.id }.movedBy(index, delta))
+                            }
+                        ) {
+                            PlaylistItem(
+                                playlist = playlist,
+                                isDarkMode = isDarkMode,
+                                onClick = { if (!isReorderingPlaylists) onPlaylistClick(playlist) },
+                                onRename = { renamePlaylist = playlist },
+                                onTogglePin = { viewModel.setPlaylistPinned(playlist.id, !playlist.isPinned) },
+                                onDelete = { viewModel.deletePlaylist(playlist.id) }
+                            )
+                        }
                     }
                 }
             }
         }
+    }
+}
+
+private enum class PlaylistSortOption {
+    RECENTS,
+    DATE_ADDED,
+    A_Z,
+    Z_A,
+    CUSTOM
+}
+
+private fun List<Long>.movedBy(index: Int, delta: Int): List<Long> {
+    val target = index + delta
+    if (index !in indices || target !in indices) return this
+    return toMutableList().apply { add(target, removeAt(index)) }
+}
+
+/** Wraps a playlist row with up/down controls while the list is in reorder mode. */
+@Composable
+private fun ReorderableRow(
+    enabled: Boolean,
+    canMoveUp: Boolean,
+    canMoveDown: Boolean,
+    onMove: (delta: Int) -> Unit,
+    content: @Composable () -> Unit
+) {
+    if (!enabled) {
+        content()
+        return
+    }
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Box(modifier = Modifier.weight(1f)) { content() }
+        Column(modifier = Modifier.padding(end = 8.dp)) {
+            IconButton(onClick = { onMove(-1) }, enabled = canMoveUp, modifier = Modifier.size(36.dp)) {
+                Icon(Icons.Default.KeyboardArrowUp, contentDescription = "Move up", tint = if (canMoveUp) AccentOrange else AccentOrange.copy(alpha = 0.25f))
+            }
+            IconButton(onClick = { onMove(1) }, enabled = canMoveDown, modifier = Modifier.size(36.dp)) {
+                Icon(Icons.Default.KeyboardArrowDown, contentDescription = "Move down", tint = if (canMoveDown) AccentOrange else AccentOrange.copy(alpha = 0.25f))
+            }
+        }
+    }
+}
+
+@Composable
+private fun PlaylistSortChip(
+    currentSort: PlaylistSortOption,
+    isDarkMode: Boolean,
+    onSortChange: (PlaylistSortOption) -> Unit
+) {
+    var expanded by remember { mutableStateOf(false) }
+    val chipBg = if (isDarkMode) Color.White.copy(alpha = 0.08f) else Color.Black.copy(alpha = 0.06f)
+    val textColor = if (isDarkMode) Color.White.copy(alpha = 0.72f) else Color(0xFF3A3A3C)
+    val menuTextColor = if (isDarkMode) Color.White else Color(0xFF1D1D1F)
+
+    Box {
+        Row(
+            modifier = Modifier
+                .clip(RoundedCornerShape(20.dp))
+                .background(chipBg)
+                .clickable { expanded = true }
+                .padding(horizontal = 12.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            Icon(
+                imageVector = when (currentSort) {
+                    PlaylistSortOption.RECENTS -> Icons.Default.History
+                    PlaylistSortOption.DATE_ADDED -> Icons.Default.Schedule
+                    PlaylistSortOption.CUSTOM -> Icons.Default.SwapVert
+                    else -> Icons.Default.SortByAlpha
+                },
+                contentDescription = null,
+                tint = textColor,
+                modifier = Modifier.size(16.dp)
+            )
+            Text(
+                text = when (currentSort) {
+                    PlaylistSortOption.RECENTS -> "Recents"
+                    PlaylistSortOption.DATE_ADDED -> "Added"
+                    PlaylistSortOption.A_Z -> "A–Z"
+                    PlaylistSortOption.Z_A -> "Z–A"
+                    PlaylistSortOption.CUSTOM -> "Custom"
+                },
+                color = textColor,
+                fontSize = 13.sp
+            )
+        }
+
+        DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false },
+            shape = RoundedCornerShape(16.dp),
+            containerColor = if (isDarkMode) SurfaceDark else Color.White,
+            shadowElevation = 16.dp
+        ) {
+            listOf(
+                PlaylistSortOption.RECENTS to "Recently played",
+                PlaylistSortOption.DATE_ADDED to "Recently added",
+                PlaylistSortOption.A_Z to "Name (A–Z)",
+                PlaylistSortOption.Z_A to "Name (Z–A)",
+                PlaylistSortOption.CUSTOM to "Custom order"
+            ).forEach { (option, label) ->
+                DropdownMenuItem(
+                    text = { Text(label, color = menuTextColor) },
+                    onClick = {
+                        onSortChange(option)
+                        expanded = false
+                    },
+                    trailingIcon = {
+                        if (currentSort == option) {
+                            Box(Modifier.size(8.dp).clip(CircleShape).background(AccentOrange))
+                        }
+                    }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun OnlinePlaylistItem(
+    playlist: OnlinePlaylistEntity,
+    viewModel: PlayerViewModel,
+    isDarkMode: Boolean,
+    onClick: () -> Unit,
+    onTogglePin: () -> Unit
+) {
+    var showMenu by remember { mutableStateOf(false) }
+    val tracks by remember(playlist.id) { viewModel.getOnlinePlaylistTracks(playlist.id) }
+        .collectAsState(initial = emptyList())
+    val textPrimary = if (isDarkMode) Color.White else Color(0xFF1D1D1F)
+    val textSecondary = if (isDarkMode) Color.White.copy(alpha = 0.45f) else Color(0xFF6E6E73)
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 2.dp)
+            .clip(RoundedCornerShape(14.dp))
+            .background(if (isDarkMode) Color.White.copy(alpha = 0.04f) else Color.Black.copy(alpha = 0.04f))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(14.dp)
+    ) {
+        Box(
+            modifier = Modifier
+                .size(48.dp)
+                .clip(RoundedCornerShape(12.dp))
+                .background(Brush.linearGradient(listOf(Color(0xFF8E2DE2), Color(0xFF4A00E0)))),
+            contentAlignment = Alignment.Center
+        ) {
+            if (!playlist.artworkUrl.isNullOrBlank()) {
+                AsyncImage(
+                    model = playlist.artworkUrl,
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize()
+                )
+            } else {
+                Icon(Icons.AutoMirrored.Filled.QueueMusic, contentDescription = null, tint = Color.White, modifier = Modifier.size(24.dp))
+            }
+        }
+        Column(modifier = Modifier.weight(1f)) {
+            Text(playlist.name, color = textPrimary, fontSize = 15.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(
+                text = "${if (playlist.isPinned) "Pinned · " else ""}${tracks.size} tracks${if (!playlist.spotifyUrl.isNullOrBlank()) " · Spotify" else " · Mueso"}",
+                color = textSecondary,
+                fontSize = 12.sp
+            )
+        }
+        Box {
+            IconButton(onClick = { showMenu = true }, modifier = Modifier.size(36.dp)) {
+                Icon(Icons.Default.MoreVert, contentDescription = "Playlist options", tint = textSecondary)
+            }
+            DropdownMenu(
+                expanded = showMenu,
+                onDismissRequest = { showMenu = false },
+                shape = RoundedCornerShape(14.dp),
+                containerColor = if (isDarkMode) SurfaceDark else Color.White,
+                shadowElevation = 8.dp
+            ) {
+                DropdownMenuItem(
+                    text = { Text(if (playlist.isPinned) "Unpin playlist" else "Pin playlist", color = textPrimary) },
+                    onClick = { showMenu = false; onTogglePin() }
+                )
+            }
+        }
+        Icon(Icons.Default.ChevronRight, contentDescription = null, tint = textSecondary)
     }
 }
 
@@ -981,6 +1319,7 @@ private fun PlaylistItem(
     isDarkMode: Boolean = true,
     onClick: () -> Unit,
     onRename: () -> Unit,
+    onTogglePin: () -> Unit,
     onDelete: () -> Unit
 ) {
     var showMenu by remember { mutableStateOf(false) }
@@ -1027,7 +1366,7 @@ private fun PlaylistItem(
                 fontWeight = FontWeight.Medium
             )
             Text(
-                text = "Playlist",
+                text = if (playlist.isPinned) "Pinned · Playlist" else "Playlist",
                 color = textSecondary,
                 fontSize = 12.sp
             )
@@ -1049,6 +1388,13 @@ private fun PlaylistItem(
                 containerColor = dropdownBg,
                 shadowElevation = 8.dp
             ) {
+                DropdownMenuItem(
+                    text = { Text(if (playlist.isPinned) "Unpin playlist" else "Pin playlist", color = textPrimary) },
+                    onClick = {
+                        showMenu = false
+                        onTogglePin()
+                    }
+                )
                 DropdownMenuItem(
                     text = { Text("Rename", color = textPrimary) },
                     onClick = {

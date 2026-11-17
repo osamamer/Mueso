@@ -85,7 +85,7 @@ fun AboutScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("About Mueso", color = textPrimary, fontWeight = FontWeight.Bold) },
+                title = { Text("About Music", color = textPrimary, fontWeight = FontWeight.Bold) },
                 navigationIcon = {
                     IconButton(onClick = onBackClick) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = textPrimary)
@@ -118,14 +118,14 @@ fun AboutScreen(
                     // Official App Logo
                     Image(
                         painter = painterResource(id = R.drawable.ic_logo),
-                        contentDescription = "Mueso Logo",
+                        contentDescription = "Music Logo",
                         modifier = Modifier
                             .size(80.dp)
                             .clip(RoundedCornerShape(20.dp))
                     )
 
                     Text(
-                        text = "Mueso",
+                        text = "Music",
                         color = textPrimary,
                         fontSize = 24.sp,
                         fontWeight = FontWeight.ExtraBold,
@@ -447,7 +447,7 @@ fun AboutScreen(
                         fontWeight = FontWeight.Medium
                     )
                     Text(
-                        text = "© 2026 Mueso",
+                        text = "© 2026 Music",
                         color = textSub.copy(alpha = 0.7f),
                         fontSize = 11.sp
                     )

@@ -1,5 +1,6 @@
 package com.akshay.musicplayer.ui.screens
 
+import com.akshay.musicplayer.ui.components.SwipeToQueue
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
@@ -52,6 +53,9 @@ import com.akshay.musicplayer.ui.components.AddToPlaylistBottomSheet
 import com.akshay.musicplayer.ui.components.PlaylistCollageArt
 import com.akshay.musicplayer.ui.components.SmartArtworkImage
 import com.akshay.musicplayer.ui.utils.rememberPlaylistGradient
+import com.akshay.musicplayer.ui.components.PlaylistTrackSort
+import com.akshay.musicplayer.ui.components.PlaylistTrackSortChip
+import com.akshay.musicplayer.ui.components.sortedForPlaylist
 
 private val AccentOrange: Color
     @Composable
@@ -82,8 +86,16 @@ fun PlaylistDetailScreen(
     val textSecondary = if (isDarkMode) Color.White.copy(alpha = 0.5f) else Color(0xFF6E6E73)
     val dropdownBg = if (isDarkMode) SurfaceDark else Color(0xFFFFFFFF)
 
+    // Sort state (remembered per playlist)
+    var trackSort by com.akshay.musicplayer.ui.components.rememberPlaylistTrackSort("local_${playlist.id}")
+    val addedDates by remember(playlist.id) { viewModel.getPlaylistTrackAddedDates(playlist.id) }
+        .collectAsState(initial = emptyMap())
+    val sortedTracks = remember(tracks, trackSort, addedDates) {
+        tracks.sortedForPlaylist(trackSort, addedDates)
+    }
+
     // Drag state
-    var displayTracks by remember(tracks) { mutableStateOf(tracks) }
+    var displayTracks by remember(sortedTracks) { mutableStateOf(sortedTracks) }
     var initialDragIndex by remember { mutableStateOf<Int?>(null) }
     var draggedIndex by remember { mutableStateOf<Int?>(null) }
     var dragOffset by remember { mutableFloatStateOf(0f) }
@@ -188,14 +200,14 @@ fun PlaylistDetailScreen(
                             )
                         )
                         .statusBarsPadding()
-                        .padding(bottom = 20.dp)
+                        .padding(bottom = 12.dp)
                 ) {
                     Column(modifier = Modifier.fillMaxWidth()) {
                         // Header with Back Button, Title, Search Toggle, and 3-Dots Menu
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(horizontal = 16.dp, vertical = 8.dp),
+                                .padding(horizontal = 8.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             IconButton(onClick = onBack) {
@@ -205,17 +217,7 @@ fun PlaylistDetailScreen(
                                     tint = Color.White
                                 )
                             }
-                            Text(
-                                text = playlist.name,
-                                color = Color.White,
-                                fontSize = 18.sp,
-                                fontWeight = FontWeight.Bold,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .padding(horizontal = 8.dp)
-                            )
+                            Spacer(modifier = Modifier.weight(1f))
 
                             // Search button
                             IconButton(onClick = { showSearch = !showSearch }) {
@@ -330,31 +332,31 @@ fun PlaylistDetailScreen(
                             )
                         }
 
-                        // Centered Hero 2x2 Collage Cover Art Card
-                        Column(
+                        // Compact header: cover art beside title and stats
+                        Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(horizontal = 20.dp, vertical = 8.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.spacedBy(16.dp)
+                                .padding(horizontal = 20.dp, vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(16.dp)
                         ) {
                             PlaylistCollageArt(
                                 tracks = tracks,
-                                modifier = Modifier.size(160.dp),
-                                cornerRadius = 20.dp,
+                                modifier = Modifier.size(96.dp),
+                                cornerRadius = 14.dp,
                                 fallbackGradient = dynamicGradient
                             )
 
                             Column(
-                                horizontalAlignment = Alignment.CenterHorizontally,
+                                modifier = Modifier.weight(1f),
                                 verticalArrangement = Arrangement.spacedBy(4.dp)
                             ) {
                                 Text(
                                     text = playlist.name,
                                     color = Color.White,
-                                    fontSize = 24.sp,
+                                    fontSize = 22.sp,
                                     fontWeight = FontWeight.ExtraBold,
-                                    textAlign = TextAlign.Center,
+                                    lineHeight = 26.sp,
                                     maxLines = 2,
                                     overflow = TextOverflow.Ellipsis
                                 )
@@ -384,8 +386,7 @@ fun PlaylistDetailScreen(
                         Button(
                             onClick = {
                                 viewModel.touchPlaylist(playlist.id)
-                                viewModel.playQueue(filteredTracks)
-                                onNavigateToPlayer()
+                                if (viewModel.playQueue(filteredTracks)) onNavigateToPlayer()
                             },
                             modifier = Modifier.weight(1f),
                             colors = ButtonDefaults.buttonColors(containerColor = AccentOrange),
@@ -401,8 +402,7 @@ fun PlaylistDetailScreen(
                         Button(
                             onClick = {
                                 viewModel.touchPlaylist(playlist.id)
-                                viewModel.playShuffle(filteredTracks)
-                                onNavigateToPlayer()
+                                if (viewModel.playShuffle(filteredTracks)) onNavigateToPlayer()
                             },
                             modifier = Modifier.weight(1f),
                             colors = ButtonDefaults.buttonColors(
@@ -533,6 +533,32 @@ fun PlaylistDetailScreen(
                 }
             }
 
+            // Sort row
+            if (tracks.size > 1) {
+                item(key = "sort_row") {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(start = 20.dp, end = 16.dp, top = 2.dp, bottom = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = if (trackSort == PlaylistTrackSort.CUSTOM) "Long-press a song to drag it" else "Switch to Custom to rearrange",
+                            color = textSecondary,
+                            fontSize = 12.sp,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f)
+                        )
+                        PlaylistTrackSortChip(
+                            current = trackSort,
+                            isDarkMode = isDarkMode,
+                            onChange = { trackSort = it }
+                        )
+                    }
+                }
+            }
+
             if (tracks.isEmpty()) {
                 item {
                     Box(
@@ -565,80 +591,84 @@ fun PlaylistDetailScreen(
             } else {
                 itemsIndexed(filteredTracks, key = { _, track -> track.id }) { index, track ->
                     val isDragging = draggedIndex == index
+                    val nowPlaying by viewModel.playbackState.collectAsState()
 
-                    PlaylistTrackItem(
-                        track = track,
-                        isDarkMode = isDarkMode,
-                        isDragging = isDragging,
-                        dragOffsetY = if (isDragging) dragOffset else 0f,
-                        onClick = {
-                            viewModel.touchPlaylist(playlist.id)
-                            viewModel.playQueue(filteredTracks, index)
-                            onNavigateToPlayer()
-                        },
-                        onRemove = { viewModel.removeTrackFromPlaylist(playlist.id, track.id) },
-                        dragModifier = if (searchQuery.isNotEmpty()) Modifier else Modifier.pointerInput(track.id) {
-                            detectDragGesturesAfterLongPress(
-                                onDragStart = {
-                                    initialDragIndex = index
-                                    draggedIndex = index
-                                    dragOffset = 0f
-                                    android.util.Log.d("MUESO_DRAG", "[LocalPlaylist] Started dragging '${track.title}' from index $index")
-                                },
-                                onDrag = { change, dragAmount ->
-                                    change.consume()
-                                    dragOffset += dragAmount.y
-
-                                    var current = draggedIndex ?: return@detectDragGesturesAfterLongPress
-
-                                    while (dragOffset > itemHeightPx * 0.5f && current < displayTracks.size - 1) {
-                                        val next = current + 1
-                                        val list = displayTracks.toMutableList()
-                                        val item = list.removeAt(current)
-                                        list.add(next, item)
-                                        displayTracks = list
-                                        current = next
-                                        draggedIndex = next
-                                        dragOffset -= itemHeightPx
-                                        android.util.Log.d("MUESO_DRAG", "[LocalPlaylist] Locally moved '${track.title}' DOWN to index $next")
+                    SwipeToQueue(onAddToQueue = { viewModel.addToQueue(track) }, trackTitle = track.title, modifier = Modifier.zIndex(if (isDragging) 1f else 0f)) {
+                        PlaylistTrackItem(
+                            track = track,
+                            isDarkMode = isDarkMode,
+                            isCurrent = track.id == nowPlaying.currentTrackId,
+                            isPlaying = nowPlaying.isPlaying,
+                            isDragging = isDragging,
+                            dragOffsetY = if (isDragging) dragOffset else 0f,
+                            onClick = {
+                                viewModel.touchPlaylist(playlist.id)
+                                if (viewModel.playQueue(filteredTracks, index)) onNavigateToPlayer()
+                            },
+                            onRemove = { viewModel.removeTrackFromPlaylist(playlist.id, track.id) },
+                            dragModifier = if (searchQuery.isNotEmpty() || trackSort != PlaylistTrackSort.CUSTOM) Modifier else Modifier.pointerInput(track.id) {
+                                detectDragGesturesAfterLongPress(
+                                    onDragStart = {
+                                        initialDragIndex = index
+                                        draggedIndex = index
+                                        dragOffset = 0f
+                                        android.util.Log.d("MUESO_DRAG", "[LocalPlaylist] Started dragging '${track.title}' from index $index")
+                                    },
+                                    onDrag = { change, dragAmount ->
+                                        change.consume()
+                                        dragOffset += dragAmount.y
+    
+                                        var current = draggedIndex ?: return@detectDragGesturesAfterLongPress
+    
+                                        while (dragOffset > itemHeightPx * 0.5f && current < displayTracks.size - 1) {
+                                            val next = current + 1
+                                            val list = displayTracks.toMutableList()
+                                            val item = list.removeAt(current)
+                                            list.add(next, item)
+                                            displayTracks = list
+                                            current = next
+                                            draggedIndex = next
+                                            dragOffset -= itemHeightPx
+                                            android.util.Log.d("MUESO_DRAG", "[LocalPlaylist] Locally moved '${track.title}' DOWN to index $next")
+                                        }
+                                        while (dragOffset < -itemHeightPx * 0.5f && current > 0) {
+                                            val prev = current - 1
+                                            val list = displayTracks.toMutableList()
+                                            val item = list.removeAt(current)
+                                            list.add(prev, item)
+                                            displayTracks = list
+                                            current = prev
+                                            draggedIndex = prev
+                                            dragOffset += itemHeightPx
+                                            android.util.Log.d("MUESO_DRAG", "[LocalPlaylist] Locally moved '${track.title}' UP to index $prev")
+                                        }
+                                    },
+                                    onDragEnd = {
+                                        val start = initialDragIndex
+                                        val finalIdx = draggedIndex
+                                        if (start != null && finalIdx != null && start != finalIdx) {
+                                            viewModel.moveTrackInPlaylist(playlist.id, start, finalIdx)
+                                            android.util.Log.d("MUESO_DRAG", "[LocalPlaylist] Drag finished! Committed move from $start -> $finalIdx")
+                                        }
+                                        draggedIndex = null
+                                        initialDragIndex = null
+                                        dragOffset = 0f
+                                    },
+                                    onDragCancel = {
+                                        val start = initialDragIndex
+                                        val finalIdx = draggedIndex
+                                        if (start != null && finalIdx != null && start != finalIdx) {
+                                            viewModel.moveTrackInPlaylist(playlist.id, start, finalIdx)
+                                            android.util.Log.d("MUESO_DRAG", "[LocalPlaylist] Drag end/cancel! Committed move from $start -> $finalIdx")
+                                        }
+                                        draggedIndex = null
+                                        initialDragIndex = null
+                                        dragOffset = 0f
                                     }
-                                    while (dragOffset < -itemHeightPx * 0.5f && current > 0) {
-                                        val prev = current - 1
-                                        val list = displayTracks.toMutableList()
-                                        val item = list.removeAt(current)
-                                        list.add(prev, item)
-                                        displayTracks = list
-                                        current = prev
-                                        draggedIndex = prev
-                                        dragOffset += itemHeightPx
-                                        android.util.Log.d("MUESO_DRAG", "[LocalPlaylist] Locally moved '${track.title}' UP to index $prev")
-                                    }
-                                },
-                                onDragEnd = {
-                                    val start = initialDragIndex
-                                    val finalIdx = draggedIndex
-                                    if (start != null && finalIdx != null && start != finalIdx) {
-                                        viewModel.moveTrackInPlaylist(playlist.id, start, finalIdx)
-                                        android.util.Log.d("MUESO_DRAG", "[LocalPlaylist] Drag finished! Committed move from $start -> $finalIdx")
-                                    }
-                                    draggedIndex = null
-                                    initialDragIndex = null
-                                    dragOffset = 0f
-                                },
-                                onDragCancel = {
-                                    val start = initialDragIndex
-                                    val finalIdx = draggedIndex
-                                    if (start != null && finalIdx != null && start != finalIdx) {
-                                        viewModel.moveTrackInPlaylist(playlist.id, start, finalIdx)
-                                        android.util.Log.d("MUESO_DRAG", "[LocalPlaylist] Drag end/cancel! Committed move from $start -> $finalIdx")
-                                    }
-                                    draggedIndex = null
-                                    initialDragIndex = null
-                                    dragOffset = 0f
-                                }
-                            )
-                        }
-                    )
+                                )
+                            }
+                        )
+                    }
                 }
             }
         }
@@ -706,6 +736,8 @@ private fun RenamePlaylistDialog(
 private fun PlaylistTrackItem(
     track: TrackEntity,
     isDarkMode: Boolean = true,
+    isCurrent: Boolean = false,
+    isPlaying: Boolean = false,
     isDragging: Boolean,
     dragOffsetY: Float,
     onClick: () -> Unit,
@@ -742,19 +774,33 @@ private fun PlaylistTrackItem(
             ?: if (track.albumId > 0) "content://media/external/audio/albumart/${track.albumId}"
             else track.filePath
 
-        SmartArtworkImage(
-            artworkUrl = artworkModel,
-            contentDescription = track.title,
+        val accent = com.akshay.musicplayer.ui.theme.LocalAccentColor.current
+        Box(
             modifier = Modifier
                 .size(48.dp)
-                .clip(RoundedCornerShape(12.dp))
-        )
+                .clip(RoundedCornerShape(12.dp)),
+            contentAlignment = Alignment.Center
+        ) {
+            SmartArtworkImage(
+                artworkUrl = artworkModel,
+                contentDescription = track.title,
+                modifier = Modifier.fillMaxSize()
+            )
+            if (isCurrent) {
+                Box(
+                    modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.45f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    com.akshay.musicplayer.ui.components.NowPlayingBars(color = accent, isPlaying = isPlaying, size = 18.dp)
+                }
+            }
+        }
 
         // Track info
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = track.title,
-                color = textPrimary,
+                color = if (isCurrent) accent else textPrimary,
                 fontSize = 15.sp,
                 fontWeight = FontWeight.Medium,
                 maxLines = 1,

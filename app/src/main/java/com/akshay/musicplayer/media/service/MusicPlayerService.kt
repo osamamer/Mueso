@@ -484,8 +484,20 @@ class MusicPlayerService : MediaSessionService() {
                     controller: MediaSession.ControllerInfo,
                     playerCommand: Int
                 ): Int {
-                    if (controller.packageName == packageName) {
+                    // System UI (notification / lock screen) commands arrive through the
+                    // media-notification controller, which carries our own package name, so it
+                    // must not be treated as the in-app UI.
+                    if (controller.packageName == packageName && !session.isMediaNotificationController(controller)) {
                         MediaSessionBridge.isSyncing = true
+                        MediaSessionBridge.externalSeekPending = false
+                    } else {
+                        // Seeks from the notification, lock screen, Bluetooth, etc. go through the rewind limit.
+                        MediaSessionBridge.externalSeekPending =
+                            playerCommand == Player.COMMAND_SEEK_IN_CURRENT_MEDIA_ITEM ||
+                                playerCommand == Player.COMMAND_SEEK_TO_MEDIA_ITEM ||
+                                playerCommand == Player.COMMAND_SEEK_TO_DEFAULT_POSITION ||
+                                playerCommand == Player.COMMAND_SEEK_BACK ||
+                                playerCommand == Player.COMMAND_SEEK_FORWARD
                     }
                     return androidx.media3.session.SessionResult.RESULT_SUCCESS
                 }
@@ -495,7 +507,7 @@ class MusicPlayerService : MediaSessionService() {
                     controller: MediaSession.ControllerInfo,
                     playerCommands: Player.Commands
                 ) {
-                    if (controller.packageName == packageName) {
+                    if (controller.packageName == packageName && !session.isMediaNotificationController(controller)) {
                         mainHandler.postDelayed({
                             MediaSessionBridge.isSyncing = false
                         }, 200L)
@@ -609,7 +621,10 @@ class MusicPlayerService : MediaSessionService() {
         MediaSessionBridge.onTransitionStateChanged = null
         MediaSessionBridge.onSeekRequested = null
         MediaSessionBridge.onNextRequested = null
+        MediaSessionBridge.onUserNextRequested = null
+        MediaSessionBridge.onSkipRefused = null
         MediaSessionBridge.onPreviousRequested = null
+        MediaSessionBridge.onUserPreviousRequested = null
         MediaSessionBridge.onPlayRequested = null
         MediaSessionBridge.onPauseRequested = null
         MediaSessionBridge.hasNextItem = null
@@ -649,7 +664,13 @@ object MediaSessionBridge {
     var onTransitionStateChanged: ((Boolean) -> Unit)? = null
     var onSeekRequested: ((Long) -> Unit)? = null
     var onNextRequested: (() -> Unit)? = null
+    var onUserNextRequested: (() -> Unit)? = null
+    var onSkipRefused: (() -> Unit)? = null
     var onPreviousRequested: (() -> Unit)? = null
+    /** Set by the ViewModel so external "previous" presses go through the same skip gate as the app. */
+    var onUserPreviousRequested: (() -> Unit)? = null
+    /** True while an external controller's seek command is being dispatched to the player. */
+    @Volatile var externalSeekPending: Boolean = false
     var onPlayRequested: (() -> Unit)? = null
     var onPauseRequested: (() -> Unit)? = null
     var hasNextItem: (() -> Boolean)? = null
@@ -831,7 +852,37 @@ class MusicForwardingPlayer(
         return baseTimeline
     }
 
+    /** Applies [RewindGate] (rewind + fast-forward limits) to seeks coming from outside the app. Returns true if the seek must be dropped. */
+    private fun refuseExternalRewind(targetPositionMs: Long): Boolean {
+        if (!MediaSessionBridge.externalSeekPending) return false
+        MediaSessionBridge.externalSeekPending = false
+        val decision = RewindGate.check(currentPosition, targetPositionMs)
+        if (decision !is RewindGate.Decision.Refused &&
+            decision !is RewindGate.Decision.ForwardWaiting &&
+            decision !is RewindGate.Decision.ForwardRefused
+        ) return false
+        SkipRefusalFeedback.playTone(com.akshay.musicplayer.AppContainer.getContext())
+        MediaSessionBridge.onSkipRefused?.invoke()
+        return true
+    }
+
+    override fun seekToDefaultPosition() {
+        if (refuseExternalRewind(0L)) return
+        super.seekToDefaultPosition()
+    }
+
+    override fun seekForward() {
+        if (refuseExternalRewind(currentPosition + seekForwardIncrement)) return
+        super.seekForward()
+    }
+
+    override fun seekBack() {
+        if (refuseExternalRewind((currentPosition - seekBackIncrement).coerceAtLeast(0L))) return
+        super.seekBack()
+    }
+
     override fun seekTo(mediaItemIndex: Int, positionMs: Long) {
+        if (mediaItemIndex == currentMediaItemIndex && refuseExternalRewind(positionMs)) return
         if (MediaSessionBridge.isOnlinePlaying) {
             MediaSessionBridge.onlinePositionMs = positionMs
             MediaSessionBridge.onSeekRequested?.invoke(positionMs)
@@ -841,6 +892,7 @@ class MusicForwardingPlayer(
     }
 
     override fun seekTo(positionMs: Long) {
+        if (refuseExternalRewind(positionMs)) return
         if (MediaSessionBridge.isOnlinePlaying) {
             MediaSessionBridge.onlinePositionMs = positionMs
             MediaSessionBridge.onSeekRequested?.invoke(positionMs)

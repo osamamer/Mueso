@@ -1,7 +1,13 @@
 @file:OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 package com.akshay.musicplayer.ui.components
 
+import androidx.compose.animation.core.Animatable
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -77,6 +83,11 @@ fun DockedMiniPlayer(
     } else 0f
 
     val miniPlayerShape = RoundedCornerShape(22.dp)
+    val swipeOffset = remember { Animatable(0f) }
+    val scope = rememberCoroutineScope()
+    val latestExpand by rememberUpdatedState(onExpandClick)
+    val latestNext by rememberUpdatedState(onNextClick)
+    val latestPrevious by rememberUpdatedState(onPreviousClick)
     val boxModifier = modifier
         .fillMaxWidth()
         .padding(horizontal = 14.dp, vertical = 4.dp)
@@ -89,12 +100,38 @@ fun DockedMiniPlayer(
         .border(1.dp, borderColor, miniPlayerShape)
         .clip(miniPlayerShape)
         .background(bgColor)
+        // Spotify-style: swipe up to open the player, swipe sideways to change track
+        .pointerInput(Unit) {
+            var expanded = false
+            detectVerticalDragGestures(
+                onDragStart = { expanded = false },
+                onVerticalDrag = { change, dy ->
+                    if (dy < -10f && !expanded) {
+                        expanded = true
+                        change.consume()
+                        latestExpand()
+                    }
+                }
+            )
+        }
+        .swipeToSkip(
+            offsetX = swipeOffset,
+            onNext = { latestNext() },
+            onPrevious = { latestPrevious() },
+            thresholdFraction = 0.22f,
+            scope = scope
+        )
         .clickable(onClick = onExpandClick)
 
     Box(
         modifier = boxModifier
     ) {
-        Column {
+        Column(
+            modifier = Modifier.graphicsLayer {
+                translationX = swipeOffset.value
+                alpha = 1f - (kotlin.math.abs(swipeOffset.value) / size.width.coerceAtLeast(1f)).coerceIn(0f, 0.8f)
+            }
+        ) {
             // Tiny progress indicator line on top
             LinearProgressIndicator(
                 progress = { progress },

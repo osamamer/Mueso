@@ -136,7 +136,7 @@ fun SplashScreen(onAnimationFinished: () -> Unit) {
         ) {
             Image(
                 painter = painterResource(id = R.drawable.ic_logo),
-                contentDescription = "Mueso Logo",
+                contentDescription = "Music Logo",
                 modifier = Modifier
                     .size(96.dp)
                     .graphicsLayer(
@@ -159,7 +159,7 @@ fun SplashScreen(onAnimationFinished: () -> Unit) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Spacer(modifier = Modifier.width(20.dp))
                     Text(
-                        text = "Mueso",
+                        text = "Music",
                         style = MaterialTheme.typography.displayLarge.copy(
                             fontWeight = FontWeight.ExtraBold,
                             letterSpacing = (-1.5).sp,

@@ -8,7 +8,7 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface PlaylistDao {
-    @Query("SELECT * FROM playlists ORDER BY dateCreated DESC")
+    @Query("SELECT * FROM playlists ORDER BY isPinned DESC, CASE WHEN isPinned = 1 THEN sortOrder ELSE 0 END ASC, MAX(lastPlayedAt, dateCreated) DESC")
     fun getAllPlaylists(): Flow<List<PlaylistEntity>>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
@@ -27,6 +27,9 @@ interface PlaylistDao {
     fun getTrackIdsForPlaylist(playlistId: Long): Flow<List<Long>>
 
     @Query("SELECT * FROM playlist_tracks WHERE playlistId = :playlistId ORDER BY orderIndex ASC")
+    fun getPlaylistTrackRefs(playlistId: Long): Flow<List<PlaylistTrackCrossRef>>
+
+    @Query("SELECT * FROM playlist_tracks WHERE playlistId = :playlistId ORDER BY orderIndex ASC")
     fun getPlaylistTracksSync(playlistId: Long): List<PlaylistTrackCrossRef>
 
     @androidx.room.Update
@@ -40,4 +43,16 @@ interface PlaylistDao {
 
     @Query("UPDATE playlists SET name = :newName WHERE id = :playlistId")
     fun renamePlaylist(playlistId: Long, newName: String): Int
+
+    @Query("UPDATE playlists SET isPinned = :isPinned WHERE id = :playlistId")
+    fun setPlaylistPinned(playlistId: Long, isPinned: Boolean): Int
+
+    @Query("UPDATE playlists SET lastPlayedAt = :timestamp WHERE id = :playlistId")
+    fun setPlaylistLastPlayed(playlistId: Long, timestamp: Long = System.currentTimeMillis()): Int
+
+    @Query("SELECT playlistId, trackId FROM playlist_tracks")
+    fun getAllTrackPairs(): List<PlaylistTrackPair>
+
+    @Query("UPDATE playlists SET sortOrder = :sortOrder WHERE id = :playlistId")
+    fun setPlaylistSortOrder(playlistId: Long, sortOrder: Int): Int
 }

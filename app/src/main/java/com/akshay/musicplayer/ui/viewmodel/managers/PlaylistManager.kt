@@ -73,15 +73,48 @@ class PlaylistManager(
         }
     }
 
+    /** Marks a local playlist as just played (keeps its creation date intact). */
     fun touchPlaylist(playlistId: Long) {
         coroutineScope.launch(Dispatchers.IO) {
-            playlistDao.updatePlaylistTimestamp(playlistId)
+            playlistDao.setPlaylistLastPlayed(playlistId)
         }
     }
 
+    /** Marks a Mueso playlist as just played (keeps its creation date intact). */
     fun touchOnlinePlaylist(playlistId: Long) {
         coroutineScope.launch(Dispatchers.IO) {
-            onlinePlaylistDao.updateOnlinePlaylistTimestamp(playlistId)
+            onlinePlaylistDao.setOnlinePlaylistLastPlayed(playlistId)
+        }
+    }
+
+    /**
+     * Finds the playlist a play queue was started from: the one that contains every queued
+     * track (and the current one) with the fewest extra songs. Returns "mueso_<id>" or
+     * "local_<id>", or null if no playlist fits.
+     */
+    fun findPlaylistKeyForQueue(queueIds: Set<Long>, currentTrackId: Long): String? {
+        if (queueIds.isEmpty() || currentTrackId !in queueIds) return null
+        fun best(pairs: List<com.akshay.musicplayer.data.db.PlaylistTrackPair>): Pair<Long, Int>? =
+            pairs.groupBy({ it.playlistId }, { it.trackId })
+                .mapValues { it.value.toSet() }
+                .filter { (_, ids) -> ids.containsAll(queueIds) }
+                .map { (id, ids) -> id to (ids.size - queueIds.size) }
+                .minByOrNull { it.second }
+        val online = best(onlinePlaylistDao.getAllTrackPairs())
+        val local = best(playlistDao.getAllTrackPairs())
+        return when {
+            online == null && local == null -> null
+            local == null || (online != null && online.second <= local.second) -> "mueso_${online!!.first}"
+            else -> "local_${local.first}"
+        }
+    }
+
+    /** Stamps lastPlayedAt for a key from [findPlaylistKeyForQueue]. Call off the main thread. */
+    fun markPlaylistKeyPlayed(key: String, timestamp: Long = System.currentTimeMillis()) {
+        val id = key.substringAfter('_').toLongOrNull() ?: return
+        when {
+            key.startsWith("mueso_") -> onlinePlaylistDao.setOnlinePlaylistLastPlayed(id, timestamp)
+            key.startsWith("local_") -> playlistDao.setPlaylistLastPlayed(id, timestamp)
         }
     }
 
@@ -105,6 +138,32 @@ class PlaylistManager(
     fun renamePlaylist(playlistId: Long, newName: String) {
         coroutineScope.launch(Dispatchers.IO) {
             playlistDao.renamePlaylist(playlistId, newName)
+        }
+    }
+
+    fun setPlaylistPinned(playlistId: Long, isPinned: Boolean) {
+        coroutineScope.launch(Dispatchers.IO) {
+            playlistDao.setPlaylistPinned(playlistId, isPinned)
+        }
+    }
+
+    /** Persists a user-chosen playlist order; [orderedIds] is top-to-bottom. */
+    fun reorderPlaylists(orderedIds: List<Long>) {
+        // Optimistic update so the list moves immediately.
+        val position = orderedIds.withIndex().associate { (index, id) -> id to index + 1 }
+        _playlists.value = _playlists.value
+            .map { playlist -> position[playlist.id]?.let { playlist.copy(sortOrder = it) } ?: playlist }
+        coroutineScope.launch(Dispatchers.IO) {
+            orderedIds.forEachIndexed { index, id -> playlistDao.setPlaylistSortOrder(id, index + 1) }
+        }
+    }
+
+    fun reorderOnlinePlaylists(orderedIds: List<Long>) {
+        val position = orderedIds.withIndex().associate { (index, id) -> id to index + 1 }
+        _onlinePlaylists.value = _onlinePlaylists.value
+            .map { playlist -> position[playlist.id]?.let { playlist.copy(sortOrder = it) } ?: playlist }
+        coroutineScope.launch(Dispatchers.IO) {
+            orderedIds.forEachIndexed { index, id -> onlinePlaylistDao.setOnlinePlaylistSortOrder(id, index + 1) }
         }
     }
 
@@ -162,6 +221,13 @@ class PlaylistManager(
         }
     }
 
+    /** trackId -> time it was added to the playlist (0 if unknown). */
+    fun getPlaylistTrackAddedDates(playlistId: Long): Flow<Map<Long, Long>> =
+        playlistDao.getPlaylistTrackRefs(playlistId).map { refs -> refs.associate { it.trackId to it.dateAdded } }
+
+    fun getOnlinePlaylistTrackAddedDates(playlistId: Long): Flow<Map<Long, Long>> =
+        onlinePlaylistDao.getOnlinePlaylistTracks(playlistId).map { rows -> rows.associate { it.trackId to it.dateAdded } }
+
     // Online Playlist Logic
 
     fun createOnlinePlaylist(name: String, description: String? = null, onCreated: ((Long) -> Unit)? = null) {
@@ -193,6 +259,12 @@ class PlaylistManager(
         }
     }
 
+    fun setOnlinePlaylistPinned(playlistId: Long, isPinned: Boolean) {
+        coroutineScope.launch(Dispatchers.IO) {
+            onlinePlaylistDao.setOnlinePlaylistPinned(playlistId, isPinned)
+        }
+    }
+
     fun updateOnlinePlaylistSpotifyUrl(playlistId: Long, spotifyUrl: String?) {
         coroutineScope.launch(Dispatchers.IO) {
             onlinePlaylistDao.updateOnlinePlaylistSpotifyUrl(playlistId, spotifyUrl?.takeIf { it.isNotBlank() })
@@ -201,6 +273,9 @@ class PlaylistManager(
     }
 
     fun updateCachedPlaylistArtwork(playlistId: Long) {
+        // A Spotify cover set by import/refresh stays; only song-derived artwork follows the tracks.
+        val current = onlinePlaylistDao.getOnlinePlaylistById(playlistId)?.artworkUrl
+        if (com.akshay.musicplayer.data.remote.SpotifyImportRepository.isSpotifyCoverUrl(current)) return
         val tracks = onlinePlaylistDao.getOnlinePlaylistTracksSync(playlistId)
         val firstArtwork = tracks.firstOrNull { !it.artworkUrl.isNullOrBlank() }?.artworkUrl
         onlinePlaylistDao.updateOnlinePlaylistArtwork(playlistId, firstArtwork)
@@ -210,6 +285,7 @@ class PlaylistManager(
         coroutineScope.launch(Dispatchers.IO) {
             val playlists = onlinePlaylistDao.getAllOnlinePlaylistsSync()
             playlists.forEach { p ->
+                if (com.akshay.musicplayer.data.remote.SpotifyImportRepository.isSpotifyCoverUrl(p.artworkUrl)) return@forEach
                 val tracks = onlinePlaylistDao.getOnlinePlaylistTracksSync(p.id)
                 val firstArtwork = tracks.firstOrNull { !it.artworkUrl.isNullOrBlank() }?.artworkUrl
                 onlinePlaylistDao.updateOnlinePlaylistArtwork(p.id, firstArtwork)
@@ -413,6 +489,9 @@ class PlaylistManager(
                 pObj.put("description", p.description ?: "")
                 pObj.put("artworkUrl", p.artworkUrl ?: "")
                 pObj.put("dateCreated", p.dateCreated)
+                pObj.put("spotifyUrl", p.spotifyUrl ?: "")
+                pObj.put("isPinned", p.isPinned)
+                pObj.put("sortOrder", p.sortOrder)
 
                 val tracks = onlinePlaylistDao.getOnlinePlaylistTracksSync(p.id)
                 val tracksArr = JSONArray()
@@ -451,12 +530,25 @@ class PlaylistManager(
                 val pObj = rootArray.getJSONObject(i)
                 val name = pObj.getString("name")
                 val desc = pObj.optString("description", "").takeIf { it.isNotBlank() }
-                val artwork = pObj.optString("artworkUrl", "").takeIf { it.isNotBlank() }
+                val artwork = pObj.optString("artworkUrl", "").takeIf { it.isNotBlank() && it != "null" }
+                val spotifyUrl = pObj.optString("spotifyUrl", "").takeIf { it.isNotBlank() && it != "null" }
+                val isPinned = pObj.optBoolean("isPinned", false)
+                val sortOrder = pObj.optInt("sortOrder", 0)
+                val dateCreated = pObj.optLong("dateCreated", 0L).takeIf { it > 0L }
 
                 val existing = existingPlaylists.firstOrNull { it.name.equals(name, ignoreCase = true) }
                 val playlistId = if (existing != null) {
                     if (desc != null && existing.description != desc) {
                         onlinePlaylistDao.updateOnlinePlaylistDetails(existing.id, existing.name, desc)
+                    }
+                    if (artwork != null && existing.artworkUrl != artwork) {
+                        onlinePlaylistDao.updateOnlinePlaylistArtwork(existing.id, artwork)
+                    }
+                    if (spotifyUrl != null && existing.spotifyUrl.isNullOrBlank()) {
+                        onlinePlaylistDao.updateOnlinePlaylistSpotifyUrl(existing.id, spotifyUrl)
+                    }
+                    if (isPinned && !existing.isPinned) {
+                        onlinePlaylistDao.setOnlinePlaylistPinned(existing.id, true)
                     }
                     existing.id
                 } else {
@@ -464,7 +556,11 @@ class PlaylistManager(
                         OnlinePlaylistEntity(
                             name = name,
                             description = desc,
-                            artworkUrl = artwork
+                            artworkUrl = artwork,
+                            dateCreated = dateCreated ?: System.currentTimeMillis(),
+                            spotifyUrl = spotifyUrl,
+                            isPinned = isPinned,
+                            sortOrder = sortOrder
                         )
                     )
                 }
@@ -493,7 +589,9 @@ class PlaylistManager(
                         }
                     }
                 }
-                updateCachedPlaylistArtwork(playlistId)
+                // Keep the picture saved in the backup; only derive one from the songs when
+                // the backup had none.
+                if (artwork == null) updateCachedPlaylistArtwork(playlistId)
             }
             markDirty()
             true

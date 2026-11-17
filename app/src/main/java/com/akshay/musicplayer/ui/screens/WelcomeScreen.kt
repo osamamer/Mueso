@@ -162,12 +162,12 @@ fun WelcomeScreen(
                 ) {
                     Image(
                         painter = painterResource(id = R.drawable.ic_logo),
-                        contentDescription = "Mueso Logo",
+                        contentDescription = "Music Logo",
                         modifier = Modifier.size(54.dp)
                     )
 
                     Text(
-                        text = "Welcome to Mueso",
+                        text = "Welcome to Music",
                         color = textPrimary,
                         fontSize = 21.sp,
                         fontWeight = FontWeight.ExtraBold,
@@ -332,7 +332,7 @@ fun WelcomeScreen(
 
             Spacer(modifier = Modifier.height(14.dp))
 
-            // ─── BOTTOM SECTION: "Skip this shyt" ABOVE "Continue to Mueso" ───
+            // ─── BOTTOM SECTION: "Skip this shyt" ABOVE "Continue to Music" ───
             Column(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalAlignment = Alignment.CenterHorizontally,
@@ -366,7 +366,7 @@ fun WelcomeScreen(
                         .height(46.dp)
                 ) {
                     Text(
-                        text = if (allPermissionsGranted) "Continue to Mueso" else "Grant All Permissions to Continue",
+                        text = if (allPermissionsGranted) "Continue to Music" else "Grant All Permissions to Continue",
                         color = if (allPermissionsGranted) Color.White else textSub.copy(alpha = 0.55f),
                         fontSize = 14.sp,
                         fontWeight = FontWeight.Bold

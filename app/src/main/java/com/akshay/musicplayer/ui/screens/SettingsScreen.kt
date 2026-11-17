@@ -109,6 +109,8 @@ fun SettingsScreen(
     val skipInteraction by viewModel.skipInteraction.collectAsState()
     val skipIntroOutro by viewModel.skipIntroOutro.collectAsState()
     val skipNonMusicOffTopic by viewModel.skipNonMusicOffTopic.collectAsState()
+    val blacklistRules by viewModel.blacklistRules.collectAsState()
+    var showAddBlacklistRule by remember { mutableStateOf(false) }
 
     // Audiophile & Appearance States
     val losslessStreamingEnabled by viewModel.losslessStreamingEnabled.collectAsState()
@@ -495,7 +497,22 @@ fun SettingsScreen(
                 }
 
                 // ═══════════════════════════════════════════════════════════
-                // 3. SMART SKIP (SPONSORBLOCK)
+                // 3. BLACKLIST
+                // ═══════════════════════════════════════════════════════════
+                item {
+                    BlacklistSettingsSection(
+                        rules = blacklistRules,
+                        isDarkMode = isDarkMode,
+                        cardColor = cardBg,
+                        accentColor = accentColor,
+                        cornerRadius = cardCorner,
+                        onAddClick = { showAddBlacklistRule = true },
+                        onRemove = viewModel::removeBlacklistRule
+                    )
+                }
+
+                // ═══════════════════════════════════════════════════════════
+                // 4. SMART SKIP (SPONSORBLOCK)
                 // ═══════════════════════════════════════════════════════════
                 item {
                     SettingsSectionHeader("Smart Skip (SponsorBlock)", accentColor)
@@ -534,7 +551,7 @@ fun SettingsScreen(
                 }
 
                 // ═══════════════════════════════════════════════════════════
-                // 4. DOWNLOADS & OFFLINE STORAGE
+                // 5. DOWNLOADS & OFFLINE STORAGE
                 // ═══════════════════════════════════════════════════════════
                 item {
                     SettingsSectionHeader("Downloads & Storage", accentColor)
@@ -1396,12 +1413,324 @@ fun SettingsScreen(
                 onDismiss = { showEqualizerSheet = false }
             )
         }
+
+        if (showAddBlacklistRule) {
+            AddBlacklistRuleDialog(
+                isDarkMode = isDarkMode,
+                accentColor = accentColor,
+                viewModel = viewModel,
+                onDismiss = { showAddBlacklistRule = false },
+                onSave = { rule ->
+                    viewModel.addBlacklistRule(rule)
+                    showAddBlacklistRule = false
+                }
+            )
+        }
     }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
 // COMPACT REUSABLE SETTINGS COMPONENTS
 // ═══════════════════════════════════════════════════════════════════════════
+
+@Composable
+private fun BlacklistSettingsSection(
+    rules: List<com.akshay.musicplayer.domain.models.BlacklistRule>,
+    isDarkMode: Boolean,
+    cardColor: Color,
+    accentColor: Color,
+    cornerRadius: androidx.compose.ui.unit.Dp,
+    onAddClick: () -> Unit,
+    onRemove: (String) -> Unit
+) {
+    val textPrimary = if (isDarkMode) Color.White else Color(0xFF1D1D1F)
+    val textSub = if (isDarkMode) Color.White.copy(alpha = 0.58f) else Color(0xFF6E6E73)
+    Column {
+        SettingsSectionHeader("Blacklist", accentColor)
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(cornerRadius))
+                .background(cardColor)
+                .padding(16.dp)
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("Blocked content", color = textPrimary, fontWeight = FontWeight.SemiBold)
+                    Text(
+                        "Hide songs, artists, or albums permanently or during daily hours.",
+                        color = textSub,
+                        fontSize = 12.sp
+                    )
+                }
+                IconButton(onClick = onAddClick) {
+                    Icon(Icons.Default.Add, contentDescription = "Add blacklist rule", tint = accentColor)
+                }
+            }
+            if (rules.isNotEmpty()) {
+                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp), color = textSub.copy(alpha = 0.18f))
+                rules.forEach { rule ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            val label = when (rule.targetType) {
+                                com.akshay.musicplayer.domain.models.BlacklistTargetType.TRACK -> "Song"
+                                com.akshay.musicplayer.domain.models.BlacklistTargetType.ARTIST -> "Artist"
+                                com.akshay.musicplayer.domain.models.BlacklistTargetType.ALBUM -> "Album"
+                            }
+                            Text("${rule.value} · $label", color = textPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            val schedule = if (rule.startMinute == null || rule.endMinute == null) {
+                                "Always blocked"
+                            } else {
+                                "Daily ${formatBlacklistTime(rule.startMinute)}–${formatBlacklistTime(rule.endMinute)}"
+                            }
+                            val filter = rule.artistFilter.takeIf { it.isNotBlank() }?.let { " · $it" }.orEmpty()
+                            Text(schedule + filter, color = textSub, fontSize = 11.sp)
+                        }
+                        IconButton(onClick = { onRemove(rule.id) }) {
+                            Icon(Icons.Default.Close, contentDescription = "Remove blacklist rule", tint = textSub)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun AddBlacklistRuleDialog(
+    isDarkMode: Boolean,
+    accentColor: Color,
+    viewModel: PlayerViewModel,
+    onDismiss: () -> Unit,
+    onSave: (com.akshay.musicplayer.domain.models.BlacklistRule) -> Unit
+) {
+    val context = LocalContext.current
+    var targetType by remember { mutableStateOf(com.akshay.musicplayer.domain.models.BlacklistTargetType.TRACK) }
+    var targetValue by remember { mutableStateOf("") }
+    var artistFilter by remember { mutableStateOf("") }
+    var songQuery by remember { mutableStateOf("") }
+    var selectedSong by remember { mutableStateOf<com.akshay.musicplayer.domain.models.TrackEntity?>(null) }
+    var songResults by remember { mutableStateOf<List<com.akshay.musicplayer.domain.models.TrackEntity>>(emptyList()) }
+    var isSearchingSongs by remember { mutableStateOf(false) }
+    var repeatDaily by remember { mutableStateOf(false) }
+    var startMinute by remember { mutableIntStateOf(9 * 60) }
+    var endMinute by remember { mutableIntStateOf(17 * 60) }
+    var typeMenuExpanded by remember { mutableStateOf(false) }
+    val textColor = if (isDarkMode) Color.White else Color(0xFF1D1D1F)
+    val helperColor = if (isDarkMode) Color.White.copy(alpha = 0.62f) else Color(0xFF6E6E73)
+    val invalidTimes = repeatDaily && startMinute == endMinute
+
+    LaunchedEffect(targetType, songQuery, selectedSong) {
+        if (targetType != com.akshay.musicplayer.domain.models.BlacklistTargetType.TRACK || songQuery.trim().length < 2 || selectedSong != null) {
+            songResults = emptyList()
+            isSearchingSongs = false
+            return@LaunchedEffect
+        }
+        songResults = emptyList()
+        isSearchingSongs = true
+        try {
+            kotlinx.coroutines.delay(300)
+            songResults = viewModel.searchBlacklistSongs(songQuery)
+        } catch (cancelled: kotlinx.coroutines.CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            songResults = emptyList()
+        } finally {
+            isSearchingSongs = false
+        }
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Add to blacklist", color = textColor) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Box {
+                    OutlinedButton(onClick = { typeMenuExpanded = true }) {
+                        Text(targetType.label)
+                        Icon(Icons.Default.ArrowDropDown, contentDescription = null)
+                    }
+                    DropdownMenu(expanded = typeMenuExpanded, onDismissRequest = { typeMenuExpanded = false }) {
+                        com.akshay.musicplayer.domain.models.BlacklistTargetType.values().forEach { type ->
+                            DropdownMenuItem(
+                                text = { Text(type.label) },
+                                onClick = {
+                                    targetType = type
+                                    targetValue = ""
+                                    artistFilter = ""
+                                    songQuery = ""
+                                    selectedSong = null
+                                    songResults = emptyList()
+                                    typeMenuExpanded = false
+                                }
+                            )
+                        }
+                    }
+                }
+                OutlinedTextField(
+                    value = if (targetType == com.akshay.musicplayer.domain.models.BlacklistTargetType.TRACK) {
+                        selectedSong?.title ?: songQuery
+                    } else targetValue,
+                    onValueChange = { value ->
+                        if (targetType == com.akshay.musicplayer.domain.models.BlacklistTargetType.TRACK) {
+                            selectedSong = null
+                            targetValue = ""
+                            songQuery = value
+                        } else {
+                            targetValue = value
+                        }
+                    },
+                    label = {
+                        Text(when (targetType) {
+                            com.akshay.musicplayer.domain.models.BlacklistTargetType.TRACK -> "Search for a song"
+                            com.akshay.musicplayer.domain.models.BlacklistTargetType.ARTIST -> "Artist name"
+                            com.akshay.musicplayer.domain.models.BlacklistTargetType.ALBUM -> "Album name"
+                        })
+                    },
+                    placeholder = {
+                        if (targetType == com.akshay.musicplayer.domain.models.BlacklistTargetType.TRACK) {
+                            Text("Type a title or artist, then choose a result")
+                        }
+                    },
+                    readOnly = targetType == com.akshay.musicplayer.domain.models.BlacklistTargetType.TRACK && selectedSong != null,
+                    singleLine = true,
+                    trailingIcon = {
+                        if (targetType == com.akshay.musicplayer.domain.models.BlacklistTargetType.TRACK) {
+                            if (isSearchingSongs) {
+                                CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp, color = accentColor)
+                            } else if (selectedSong != null) {
+                                IconButton(onClick = {
+                                    selectedSong = null
+                                    targetValue = ""
+                                    songQuery = ""
+                                }) {
+                                    Icon(Icons.Default.Close, contentDescription = "Choose a different song", tint = helperColor)
+                                }
+                            }
+                        }
+                    }
+                )
+                if (selectedSong != null) {
+                    Text("Selected song by ${selectedSong!!.artist}", color = helperColor, fontSize = 12.sp)
+                }
+                if (targetType == com.akshay.musicplayer.domain.models.BlacklistTargetType.TRACK && selectedSong == null && songResults.isNotEmpty()) {
+                    LazyColumn(
+                        modifier = Modifier.fillMaxWidth().heightIn(max = 210.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        items(songResults, key = { it.id }) { song ->
+                            val durationLabel = if (song.duration > 0L) {
+                                "%d:%02d".format(song.duration / 60_000L, (song.duration / 1_000L) % 60L)
+                            } else null
+                            val albumLabel = song.album.takeIf {
+                                it.isNotBlank() && !it.equals("YouTube Music", ignoreCase = true) && !it.equals("Music Video", ignoreCase = true)
+                            }
+                            val songDetails = listOfNotNull(song.artist, albumLabel, durationLabel)
+                                .filter { it.isNotBlank() }
+                                .joinToString(" · ")
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .clickable {
+                                        selectedSong = song
+                                        targetValue = song.title
+                                        artistFilter = song.artist
+                                        songQuery = ""
+                                        songResults = emptyList()
+                                    }
+                                    .padding(horizontal = 10.dp, vertical = 9.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                Icon(Icons.Default.MusicNote, contentDescription = null, tint = accentColor, modifier = Modifier.size(18.dp))
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(song.title, color = textColor, maxLines = 1, overflow = TextOverflow.Ellipsis, fontSize = 13.sp)
+                                    Text(songDetails, color = helperColor, maxLines = 1, overflow = TextOverflow.Ellipsis, fontSize = 11.sp)
+                                }
+                            }
+                        }
+                    }
+                } else if (targetType == com.akshay.musicplayer.domain.models.BlacklistTargetType.TRACK && songQuery.trim().length >= 2 && !isSearchingSongs && songResults.isEmpty() && selectedSong == null) {
+                    Text("No matching songs found. Try another title or artist.", color = helperColor, fontSize = 12.sp)
+                }
+                if (targetType == com.akshay.musicplayer.domain.models.BlacklistTargetType.ALBUM) {
+                    OutlinedTextField(
+                        value = artistFilter,
+                        onValueChange = { artistFilter = it },
+                        label = { Text("Artist filter (optional)") },
+                        singleLine = true
+                    )
+                }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Schedule daily", color = textColor)
+                        Text("Turn off to block at all times", color = helperColor, fontSize = 11.sp)
+                    }
+                    Switch(checked = repeatDaily, onCheckedChange = { repeatDaily = it })
+                }
+                if (repeatDaily) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedButton(
+                            modifier = Modifier.weight(1f),
+                            onClick = {
+                                android.app.TimePickerDialog(
+                                    context,
+                                    { _, hour, minute -> startMinute = hour * 60 + minute },
+                                    startMinute / 60,
+                                    startMinute % 60,
+                                    false
+                                ).show()
+                            }
+                        ) { Text("From ${formatBlacklistTime(startMinute)}") }
+                        OutlinedButton(
+                            modifier = Modifier.weight(1f),
+                            onClick = {
+                                android.app.TimePickerDialog(
+                                    context,
+                                    { _, hour, minute -> endMinute = hour * 60 + minute },
+                                    endMinute / 60,
+                                    endMinute % 60,
+                                    false
+                                ).show()
+                            }
+                        ) { Text("Until ${formatBlacklistTime(endMinute)}") }
+                    }
+                    Text("Repeats every day; overnight ranges are supported.", color = helperColor, fontSize = 11.sp)
+                    if (invalidTimes) Text("Choose different start and end times.", color = MaterialTheme.colorScheme.error, fontSize = 12.sp)
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                enabled = (if (targetType == com.akshay.musicplayer.domain.models.BlacklistTargetType.TRACK) selectedSong != null else targetValue.isNotBlank()) && !invalidTimes,
+                onClick = {
+                    onSave(
+                        com.akshay.musicplayer.domain.models.BlacklistRule(
+                            targetType = targetType,
+                            value = selectedSong?.title?.trim() ?: targetValue.trim(),
+                            artistFilter = selectedSong?.artist?.trim() ?: artistFilter.trim(),
+                            trackId = selectedSong?.id,
+                            trackDurationMs = selectedSong?.duration?.takeIf { it > 0L },
+                            startMinute = if (repeatDaily) startMinute else null,
+                            endMinute = if (repeatDaily) endMinute else null
+                        )
+                    )
+                }
+            ) { Text("Add", color = accentColor) }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
+    )
+}
+
+private fun formatBlacklistTime(minuteOfDay: Int): String {
+    val hour = minuteOfDay / 60
+    val minute = minuteOfDay % 60
+    return String.format(Locale.getDefault(), "%02d:%02d", hour, minute)
+}
 
 @Composable
 private fun SettingsSectionHeader(

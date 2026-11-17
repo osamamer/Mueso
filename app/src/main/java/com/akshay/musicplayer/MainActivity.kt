@@ -1,6 +1,5 @@
 package com.akshay.musicplayer
 
-import android.content.ContentResolver
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -197,14 +196,17 @@ class MainActivity : ComponentActivity() {
 
     private fun setupViewModel() {
         val appContext = applicationContext
-        val contentResolver: ContentResolver = appContext.contentResolver
-        val mediaStoreDataSource = LocalMediaStoreDataSource(contentResolver, Dispatchers.IO)
+        val prefs = appContext.getSharedPreferences("mueso_prefs", android.content.Context.MODE_PRIVATE)
+        val mediaStoreDataSource = LocalMediaStoreDataSource(
+            context = appContext,
+            ioDispatcher = Dispatchers.IO,
+            getDownloadFolder = { prefs.getString("download_folder", "Music/Mueso") ?: "Music/Mueso" }
+        )
         val trackRepository = TrackRepositoryImpl(mediaStoreDataSource)
         val getLocalTracksUseCase = GetLocalTracksUseCase(trackRepository)
         val db = com.akshay.musicplayer.data.db.AppDatabase.getDatabase(appContext)
         val playlistDao = db.playlistDao()
         val onlinePlaylistDao = db.onlinePlaylistDao()
-        val prefs = appContext.getSharedPreferences("mueso_prefs", android.content.Context.MODE_PRIVATE)
 
         playerViewModel = ViewModelProvider(
             this,
@@ -283,6 +285,12 @@ class MainActivity : ComponentActivity() {
 
     private fun handleNotificationIntent(intent: android.content.Intent?) {
         if (intent == null) return
+        if (com.akshay.musicplayer.data.remote.SpotifyAuth.isCallback(intent.data)) {
+            playerViewModel.handleSpotifyLoginCallback(this, intent.data!!)
+            // Don't handle the same redirect again after a configuration change.
+            intent.data = null
+            return
+        }
         when (intent.action) {
             com.akshay.musicplayer.media.notification.NotificationHelper.ACTION_OPEN_OFFLINE_LIBRARY -> {
                 playerViewModel.setOfflineLibraryTab(1)

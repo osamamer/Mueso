@@ -221,7 +221,7 @@ fun VerticalPagerScreen(
                 playlistTrackCount = playlistTrackCount,
                 isDarkMode = isDarkMode,
                 onTrackClick = { index ->
-                    viewModel.playTrackAtIndex(index)
+                    viewModel.requestPlayTrackAtIndex(index)
                     viewModel.dismissQueueSheet()
                 },
                 onMove = { from, to -> viewModel.moveInQueue(from, to) },

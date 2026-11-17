@@ -68,6 +68,7 @@ fun LyricsView(
     onSeekTo: (Long) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
+    val lyricsRtl = rememberLyricsRtl(lyrics)
     val lyricsFont = LocalLyricsFontSize.current
     val accentColor = LocalAccentColor.current
     val adjustedPositionMs = (currentPositionMs + lyricsOffsetMs).coerceAtLeast(0L)
@@ -125,7 +126,7 @@ fun LyricsView(
                                     ),
                                     color = Color.White.copy(alpha = 0.35f),
                                     fontWeight = FontWeight.Bold,
-                                    textAlign = TextAlign.Start,
+                                    textAlign = lyricsTextAlign(lyricsRtl),
                                     modifier = Modifier.fillMaxWidth()
                                 )
                                 Spacer(modifier = Modifier.height(4.dp))
@@ -144,7 +145,7 @@ fun LyricsView(
                                     alpha = if (lyricsFetchStatus == LyricsFetchStatus.FETCHING || lyrics == null) 0.5f else 1f
                                 ),
                                 fontWeight = FontWeight.ExtraBold,
-                                textAlign = TextAlign.Start,
+                                textAlign = lyricsTextAlign(lyricsRtl),
                                 modifier = Modifier.fillMaxWidth()
                             )
 
@@ -160,7 +161,7 @@ fun LyricsView(
                                     ),
                                     color = Color.White.copy(alpha = 0.35f),
                                     fontWeight = FontWeight.Bold,
-                                    textAlign = TextAlign.Start,
+                                    textAlign = lyricsTextAlign(lyricsRtl),
                                     modifier = Modifier.fillMaxWidth()
                                 )
                             }
@@ -234,6 +235,7 @@ private fun InlineLyricsGlassCard(
     onApplyCandidate: (LrclibSearchResultItem) -> Unit,
     onSeekTo: (Long) -> Unit
 ) {
+    val lyricsRtl = rememberLyricsRtl(lyrics)
     val accentColor = LocalAccentColor.current
     val lyricsFont = LocalLyricsFontSize.current
     var isSearchInputActive by remember { mutableStateOf(false) }
@@ -547,7 +549,7 @@ private fun InlineLyricsGlassCard(
                         ),
                         color = if (isActive) Color.White else Color.White.copy(alpha = 0.35f),
                         fontWeight = if (isActive) FontWeight.ExtraBold else FontWeight.Medium,
-                        textAlign = TextAlign.Start,
+                        textAlign = lyricsTextAlign(lyricsRtl),
                         modifier = Modifier
                             .fillMaxWidth()
                             .clickable { onSeekTo(line.timestampMs) }
@@ -591,7 +593,7 @@ private fun InlineLyricsGlassCard(
                             lineHeight = 22.sp,
                             color = Color.White.copy(alpha = 0.9f),
                             fontWeight = FontWeight.Medium,
-                            textAlign = TextAlign.Start,
+                            textAlign = lyricsTextAlign(lyricsRtl),
                             modifier = Modifier.fillMaxWidth()
                         )
                     }

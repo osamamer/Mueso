@@ -1,5 +1,6 @@
 package com.akshay.musicplayer.ui.screens
 
+import com.akshay.musicplayer.ui.components.SwipeToQueue
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.*
 import androidx.compose.foundation.background
@@ -287,16 +288,18 @@ fun ArtistDetailScreen(
                     }
 
                     itemsIndexed(artistPage.topSongs) { index, track ->
-                        ArtistTrackRow(
-                            index = index + 1,
-                            track = track,
-                            textColor = textColor,
-                            textSubColor = textSubColor,
-                            onClick = {
-                                viewModel.playArtistTopSongs(artistPage.topSongs, startIndex = index)
-                                onNavigateToPlayer()
-                            }
-                        )
+                        SwipeToQueue(onAddToQueue = { viewModel.addToQueue(track.toTrackEntity()) }, trackTitle = track.title) {
+                            ArtistTrackRow(
+                                index = index + 1,
+                                track = track,
+                                textColor = textColor,
+                                textSubColor = textSubColor,
+                                onClick = {
+                                    viewModel.playArtistTopSongs(artistPage.topSongs, startIndex = index)
+                                    onNavigateToPlayer()
+                                }
+                            )
+                        }
                     }
                 }
 

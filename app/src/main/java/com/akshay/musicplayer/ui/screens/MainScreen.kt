@@ -1,9 +1,11 @@
 @file:Suppress("DEPRECATION")
 package com.akshay.musicplayer.ui.screens
 
+import com.akshay.musicplayer.ui.components.SwipeToQueue
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandHorizontally
@@ -44,6 +46,7 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.text.TextStyle
@@ -52,8 +55,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.akshay.musicplayer.data.db.PlaylistEntity
-import com.akshay.musicplayer.ui.components.ClassicBottomBar
-import com.akshay.musicplayer.ui.components.ClassicNavTab
+import com.akshay.musicplayer.data.db.OnlinePlaylistEntity
 import com.akshay.musicplayer.ui.components.DockedMiniPlayer
 import com.akshay.musicplayer.ui.screens.ClassicPlayerScreen
 import com.akshay.musicplayer.ui.viewmodel.PlayerViewModel
@@ -72,9 +74,12 @@ private val AccentOrange: Color
 fun MainScreen(viewModel: PlayerViewModel) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val pagerState = rememberPagerState(initialPage = 1, pageCount = { 3 })
-    val classicPagerState = rememberPagerState(initialPage = 0, pageCount = { 3 })
     val coroutineScope = rememberCoroutineScope()
     var selectedPlaylist by remember { mutableStateOf<PlaylistEntity?>(null) }
+    var selectedMuesoPlaylist by remember { mutableStateOf<OnlinePlaylistEntity?>(null) }
+    var playlistToReturnTo by remember { mutableStateOf<PlaylistEntity?>(null) }
+    var muesoPlaylistToReturnTo by remember { mutableStateOf<OnlinePlaylistEntity?>(null) }
+    var onlinePlaylistToReturnTo by remember { mutableStateOf<com.akshay.musicplayer.ui.screens.SelectedOnlinePlaylist?>(null) }
     var selectedTrackForPlaylist by remember { mutableStateOf<com.akshay.musicplayer.domain.models.TrackEntity?>(null) }
     val onlinePlaylists by viewModel.onlinePlaylists.collectAsState()
     var isSearchActive by remember { mutableStateOf(false) }
@@ -89,32 +94,29 @@ fun MainScreen(viewModel: PlayerViewModel) {
     val googleAccount by viewModel.googleAccount.collectAsState()
 
     val playerLayoutStyle by viewModel.playerLayoutStyle.collectAsState()
-    var classicNavTab by remember { mutableStateOf(ClassicNavTab.LIBRARY) }
+    var showLibrary by remember { mutableStateOf(false) }
     var isClassicPlayerExpanded by remember { mutableStateOf(false) }
 
-    LaunchedEffect(playerLayoutStyle) {
-        if (playerLayoutStyle == "classic") {
-            if (showSettingsScreen) {
-                classicNavTab = ClassicNavTab.SETTINGS
-                classicPagerState.scrollToPage(ClassicNavTab.SETTINGS.ordinal)
-                showSettingsScreen = false
-            }
-        } else {
-            if (classicNavTab == ClassicNavTab.SETTINGS) {
-                showSettingsScreen = true
-                classicNavTab = ClassicNavTab.LIBRARY
-                classicPagerState.scrollToPage(0)
+    val playbackState by viewModel.playbackState.collectAsState()
+    val skipRefusalEvent by viewModel.skipRefusalEvents.collectAsState()
+    val shakeOffset = remember { Animatable(0f) }
+    val shakeDistancePx = with(androidx.compose.ui.platform.LocalDensity.current) { 12.dp.toPx() }
+    LaunchedEffect(skipRefusalEvent) {
+        if (skipRefusalEvent > 0L) {
+            listOf(1f, -1f, 0.75f, -0.75f, 0.4f, -0.4f, 0f).forEach { amount ->
+                shakeOffset.animateTo(amount * shakeDistancePx, animationSpec = tween(durationMillis = 45))
             }
         }
     }
-
-    val playbackState by viewModel.playbackState.collectAsState()
     val activeAudioFormat by viewModel.activeAudioFormat.collectAsState()
     val currentTrack = remember(playbackState.currentTrackId, viewModel.getQueueTracks()) {
         viewModel.getQueueTracks().firstOrNull { it.id == playbackState.currentTrackId }
     }
 
     val navigateToPlayer: () -> Unit = {
+        playlistToReturnTo = null
+        muesoPlaylistToReturnTo = null
+        onlinePlaylistToReturnTo = null
         if (playerLayoutStyle == "classic") {
             isClassicPlayerExpanded = true
         } else {
@@ -122,8 +124,64 @@ fun MainScreen(viewModel: PlayerViewModel) {
         }
     }
 
+    val navigateToPlayerFromLocalPlaylist: () -> Unit = {
+        playlistToReturnTo = selectedPlaylist
+        selectedPlaylist = null
+        if (playerLayoutStyle == "classic") {
+            isClassicPlayerExpanded = true
+        } else {
+            coroutineScope.launch { pagerState.animateScrollToPage(1) }
+        }
+    }
+
+    val navigateToPlayerFromMuesoPlaylist: () -> Unit = {
+        muesoPlaylistToReturnTo = selectedMuesoPlaylist
+        selectedMuesoPlaylist = null
+        if (playerLayoutStyle == "classic") {
+            isClassicPlayerExpanded = true
+        } else {
+            coroutineScope.launch { pagerState.animateScrollToPage(1) }
+        }
+    }
+
+    val navigateToPlayerFromOnlinePlaylist: (com.akshay.musicplayer.ui.screens.SelectedOnlinePlaylist) -> Unit = { playlist ->
+        onlinePlaylistToReturnTo = playlist
+        viewModel.closeSelectedOnlinePlaylist()
+        if (playerLayoutStyle == "classic") {
+            isClassicPlayerExpanded = true
+        } else {
+            coroutineScope.launch { pagerState.animateScrollToPage(1) }
+        }
+    }
+
+    androidx.activity.compose.BackHandler(enabled = showLibrary && playerLayoutStyle == "classic") {
+        showLibrary = false
+    }
+
     androidx.activity.compose.BackHandler(enabled = isClassicPlayerExpanded) {
         isClassicPlayerExpanded = false
+    }
+
+    val canReturnToPlaylist =
+        (playerLayoutStyle == "classic" && (playlistToReturnTo != null || muesoPlaylistToReturnTo != null || onlinePlaylistToReturnTo != null)) ||
+            (playerLayoutStyle != "classic" && pagerState.currentPage == 1 && (playlistToReturnTo != null || muesoPlaylistToReturnTo != null || onlinePlaylistToReturnTo != null))
+    androidx.activity.compose.BackHandler(enabled = canReturnToPlaylist) {
+        playlistToReturnTo?.let {
+            selectedPlaylist = it
+            playlistToReturnTo = null
+        }
+        muesoPlaylistToReturnTo?.let {
+            selectedMuesoPlaylist = it
+            muesoPlaylistToReturnTo = null
+        }
+        onlinePlaylistToReturnTo?.let {
+            viewModel.setSelectedOnlinePlaylist(it)
+            onlinePlaylistToReturnTo = null
+        }
+        isClassicPlayerExpanded = false
+        if (playerLayoutStyle != "classic") {
+            coroutineScope.launch { pagerState.animateScrollToPage(0) }
+        }
     }
 
     androidx.activity.compose.BackHandler(enabled = selectedArtistPage != null) {
@@ -132,6 +190,10 @@ fun MainScreen(viewModel: PlayerViewModel) {
 
     androidx.activity.compose.BackHandler(enabled = selectedOnlinePlaylist != null) {
         viewModel.closeSelectedOnlinePlaylist()
+    }
+
+    androidx.activity.compose.BackHandler(enabled = selectedMuesoPlaylist != null) {
+        selectedMuesoPlaylist = null
     }
 
     androidx.activity.compose.BackHandler(enabled = showSettingsScreen) {
@@ -143,21 +205,11 @@ fun MainScreen(viewModel: PlayerViewModel) {
         viewModel.setSearchQuery("")
     }
 
-    androidx.activity.compose.BackHandler(enabled = playerLayoutStyle == "classic" && classicNavTab != ClassicNavTab.LIBRARY && !isClassicPlayerExpanded && selectedPlaylist == null && selectedArtistPage == null && selectedOnlinePlaylist == null && !isSearchActive && !showSettingsScreen) {
-        classicNavTab = ClassicNavTab.LIBRARY
-        coroutineScope.launch {
-            classicPagerState.animateScrollToPage(
-                page = ClassicNavTab.LIBRARY.ordinal,
-                animationSpec = tween(280, easing = FastOutSlowInEasing)
-            )
-        }
-    }
-
-    androidx.activity.compose.BackHandler(enabled = playerLayoutStyle != "classic" && pagerState.currentPage != 1 && selectedPlaylist == null && selectedArtistPage == null && selectedOnlinePlaylist == null && !isSearchActive && !showSettingsScreen) {
+    androidx.activity.compose.BackHandler(enabled = playerLayoutStyle != "classic" && pagerState.currentPage != 1 && selectedPlaylist == null && selectedMuesoPlaylist == null && selectedArtistPage == null && selectedOnlinePlaylist == null && !isSearchActive && !showSettingsScreen) {
         coroutineScope.launch { pagerState.animateScrollToPage(1) }
     }
 
-    androidx.activity.compose.BackHandler(enabled = (playerLayoutStyle == "classic" || pagerState.currentPage == 1) && !isClassicPlayerExpanded && selectedPlaylist == null && selectedArtistPage == null && selectedOnlinePlaylist == null && !isSearchActive && !showSettingsScreen && hasUnbackedUpChanges && googleAccount != null) {
+    androidx.activity.compose.BackHandler(enabled = (playerLayoutStyle == "classic" || pagerState.currentPage == 1) && !isClassicPlayerExpanded && selectedPlaylist == null && selectedMuesoPlaylist == null && selectedArtistPage == null && selectedOnlinePlaylist == null && !isSearchActive && !showSettingsScreen && !(showLibrary && playerLayoutStyle == "classic") && hasUnbackedUpChanges && googleAccount != null) {
         viewModel.performDriveBackup(context)
         (context as? android.app.Activity)?.moveTaskToBack(true)
     }
@@ -214,94 +266,44 @@ fun MainScreen(viewModel: PlayerViewModel) {
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
+                .graphicsLayer { translationX = shakeOffset.value }
         ) {
             val isClassic = playerLayoutStyle == "classic"
-            val isOnlineActive = if (isClassic) classicNavTab == ClassicNavTab.EXPLORE else pagerState.currentPage == 2
+            val isOnlineActive = if (isClassic) false else pagerState.currentPage == 2
 
             if (isClassic) {
-                // ─── CLASSIC DUAL-MODE ARCHITECTURE ───
-                Box(modifier = Modifier.fillMaxSize()) {
-                    HorizontalPager(
-                        state = classicPagerState,
-                        modifier = Modifier.fillMaxSize(),
-                        userScrollEnabled = false,
-                        beyondViewportPageCount = 2
-                    ) { page ->
-                        when (page) {
-                            0 -> {
-                                OfflineLibraryScreen(
-                                    viewModel = viewModel,
-                                    onNavigateToPlayer = navigateToPlayer,
-                                    onPlaylistClick = { selectedPlaylist = it }
-                                )
-                            }
-                            1 -> {
-                                OnlinePlaylistsScreen(
-                                    viewModel = viewModel,
-                                    onNavigateToPlayer = navigateToPlayer,
-                                    onDetailVisibilityChanged = { isOnlineDetailActive = it }
-                                )
-                            }
-                            2 -> {
-                                SettingsScreen(
-                                    viewModel = viewModel,
-                                    onBackClick = {
-                                        classicNavTab = ClassicNavTab.LIBRARY
-                                        coroutineScope.launch {
-                                            classicPagerState.animateScrollToPage(
-                                                page = ClassicNavTab.LIBRARY.ordinal,
-                                                animationSpec = tween(280, easing = FastOutSlowInEasing)
-                                            )
-                                        }
-                                    }
-                                )
-                            }
-                        }
-                    }
+                // ─── CLASSIC: Spotify-style home, library behind the profile picture ───
+                val googlePhotoUrl = googleAccount?.photoUrl?.toString()
+                HomeScreen(
+                    viewModel = viewModel,
+                    googlePhotoUrl = googlePhotoUrl,
+                    onOpenLibrary = { showLibrary = true },
+                    onOpenSettings = { showSettingsScreen = true },
+                    onSearchClick = { isSearchActive = true },
+                    onPlaylistClick = { selectedPlaylist = it },
+                    onOnlinePlaylistClick = { selectedMuesoPlaylist = it }
+                )
 
-                    // Floating MiniPlayer & Bottom Navigation Bar overlay
-                    Column(
-                        modifier = Modifier
-                            .align(Alignment.BottomCenter)
-                            .fillMaxWidth(),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        // Floating MiniPlayer with enter/exit transition
-                        androidx.compose.animation.AnimatedVisibility(
-                            visible = currentTrack != null && !isClassicPlayerExpanded && selectedPlaylist == null && selectedArtistPage == null && selectedOnlinePlaylist == null && !isSearchActive,
-                            enter = androidx.compose.animation.fadeIn(animationSpec = tween(180, delayMillis = 60)) +
-                                    androidx.compose.animation.scaleIn(initialScale = 0.88f, transformOrigin = TransformOrigin(0.5f, 0.5f)),
-                            exit = androidx.compose.animation.fadeOut(animationSpec = tween(150)) +
-                                    androidx.compose.animation.scaleOut(targetScale = 0.88f, transformOrigin = TransformOrigin(0.5f, 0.5f))
-                        ) {
-                            DockedMiniPlayer(
-                                track = currentTrack,
-                                playbackState = playbackState,
-                                audioFormat = activeAudioFormat,
-                                isDarkMode = isDarkMode,
-                                onExpandClick = { isClassicPlayerExpanded = true },
-                                onPlayPauseClick = { viewModel.togglePlayPause() },
-                                onPreviousClick = { viewModel.playPreviousTrack() },
-                                onNextClick = { viewModel.playNextTrack() },
-                                modifier = Modifier.padding(bottom = 6.dp)
-                            )
-                        }
-
-                        // Persistent Bottom Navigation Bar
-                        ClassicBottomBar(
-                            currentTab = classicNavTab,
-                            isDarkMode = isDarkMode,
-                            onTabSelected = { tab ->
-                                classicNavTab = tab
-                                coroutineScope.launch {
-                                    classicPagerState.animateScrollToPage(
-                                        page = tab.ordinal,
-                                        animationSpec = tween(280, easing = FastOutSlowInEasing)
-                                    )
-                                }
-                            }
-                        )
-                    }
+                androidx.compose.animation.AnimatedVisibility(
+                    visible = showLibrary,
+                    enter = androidx.compose.animation.slideInHorizontally(
+                        initialOffsetX = { -it },
+                        animationSpec = tween(280, easing = FastOutSlowInEasing)
+                    ) + androidx.compose.animation.fadeIn(tween(200)),
+                    exit = androidx.compose.animation.slideOutHorizontally(
+                        targetOffsetX = { -it },
+                        animationSpec = tween(240, easing = FastOutSlowInEasing)
+                    ) + androidx.compose.animation.fadeOut(tween(180)),
+                    modifier = Modifier.fillMaxSize()
+                ) {
+                    LibraryScreen(
+                        viewModel = viewModel,
+                        googlePhotoUrl = googlePhotoUrl,
+                        onBack = { showLibrary = false },
+                        onOpenSettings = { showSettingsScreen = true },
+                        onPlaylistClick = { selectedPlaylist = it },
+                        onOnlinePlaylistClick = { selectedMuesoPlaylist = it }
+                    )
                 }
 
                 // Full-screen Classic Player Expansion (Animates directly into/from floating mini player)
@@ -351,7 +353,8 @@ fun MainScreen(viewModel: PlayerViewModel) {
                         0 -> OfflineLibraryScreen(
                             viewModel = viewModel,
                             onNavigateToPlayer = navigateToPlayer,
-                            onPlaylistClick = { selectedPlaylist = it }
+                            onPlaylistClick = { selectedPlaylist = it },
+                            onOnlinePlaylistClick = { selectedMuesoPlaylist = it }
                         )
                         1 -> PlayerScreen(viewModel = viewModel)
                         2 -> OnlinePlaylistsScreen(
@@ -368,9 +371,17 @@ fun MainScreen(viewModel: PlayerViewModel) {
 
             // Top Navigation Bar with integrated search (hidden when viewing a playlist detail on active page, settings, or full player)
             val shouldHideTopBar = if (isClassic) {
-                (selectedPlaylist != null) || (selectedArtistPage != null) || (selectedOnlinePlaylist != null) || isOnlineDetailActive || (classicNavTab == ClassicNavTab.SETTINGS) || isClassicPlayerExpanded
+                !isSearchActive || (selectedPlaylist != null) || (selectedMuesoPlaylist != null) || (selectedArtistPage != null) || (selectedOnlinePlaylist != null) || isClassicPlayerExpanded
             } else {
-                (selectedPlaylist != null) || (selectedArtistPage != null) || (selectedOnlinePlaylist != null) || (pagerState.currentPage == 2 && isOnlineDetailActive)
+                (selectedPlaylist != null) || (selectedMuesoPlaylist != null) || (selectedArtistPage != null) || (selectedOnlinePlaylist != null) || (pagerState.currentPage == 2 && isOnlineDetailActive)
+            }
+
+            if (isClassic && !shouldHideTopBar) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(if (isDarkMode) BgDark else Color.White)
+                )
             }
 
             if (!shouldHideTopBar) {
@@ -379,7 +390,7 @@ fun MainScreen(viewModel: PlayerViewModel) {
                     isSearchActive = isSearchActive,
                     searchQuery = searchQuery,
                     isDarkMode = isDarkMode,
-                    currentPage = if (isClassic) (if (classicNavTab == ClassicNavTab.EXPLORE) 2 else 0) else pagerState.currentPage,
+                    currentPage = if (isClassic) 0 else pagerState.currentPage,
                     hasTrackPlaying = hasTrackPlaying,
                     onSearchClick = { isSearchActive = true },
                     onSearchClose = {
@@ -387,19 +398,7 @@ fun MainScreen(viewModel: PlayerViewModel) {
                         viewModel.setSearchQuery("")
                     },
                     onQueryChange = { viewModel.setSearchQuery(it) },
-                    onSettingsClick = {
-                        if (isClassic) {
-                            classicNavTab = ClassicNavTab.SETTINGS
-                            coroutineScope.launch {
-                                classicPagerState.animateScrollToPage(
-                                    page = ClassicNavTab.SETTINGS.ordinal,
-                                    animationSpec = tween(280, easing = FastOutSlowInEasing)
-                                )
-                            }
-                        } else {
-                            showSettingsScreen = true
-                        }
-                    },
+                    onSettingsClick = { showSettingsScreen = true },
                     googleAccount = googleAccount,
                     modifier = Modifier.align(Alignment.TopCenter)
                 )
@@ -696,99 +695,101 @@ fun MainScreen(viewModel: PlayerViewModel) {
                                 }
                                 items(results.size) { index ->
                                     val track = results[index]
-                                    Row(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .clip(RoundedCornerShape(12.dp))
-                                            .clickable {
-                                                viewModel.playTrack(track)
-                                                isSearchActive = false
-                                                viewModel.setSearchQuery("")
-                                                navigateToPlayer()
-                                            }
-                                            .padding(8.dp),
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                                    ) {
-                                        val thumbModel = track.artworkUrl ?: "content://media/external/audio/albumart/${track.albumId}"
-                                        Box(
+                                    SwipeToQueue(onAddToQueue = { viewModel.addToQueue(track) }, trackTitle = track.title) {
+                                        Row(
                                             modifier = Modifier
-                                                .size(40.dp)
-                                                .clip(RoundedCornerShape(8.dp))
-                                                .background(Color.White.copy(alpha = 0.1f)),
-                                            contentAlignment = Alignment.Center
+                                                .fillMaxWidth()
+                                                .clip(RoundedCornerShape(12.dp))
+                                                .clickable {
+                                                    viewModel.playTrack(track)
+                                                    isSearchActive = false
+                                                    viewModel.setSearchQuery("")
+                                                    navigateToPlayer()
+                                                }
+                                                .padding(8.dp),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(12.dp)
                                         ) {
-                                            com.akshay.musicplayer.ui.components.SmartArtworkImage(
-                                                artworkUrl = thumbModel,
-                                                contentDescription = null,
-                                                modifier = Modifier.fillMaxSize(),
-                                                thumbnailQuality = "Low (Fast)"
-                                            )
-                                        }
-
-                                        Column(modifier = Modifier.weight(1f)) {
-                                            Text(
-                                                text = track.title,
-                                                color = if (isDarkMode) Color.White else Color(0xFF1D1D1F),
-                                                fontSize = 14.sp,
-                                                fontWeight = FontWeight.Medium,
-                                                maxLines = 1,
-                                                overflow = TextOverflow.Ellipsis
-                                            )
-                                            Text(
-                                                text = track.artist,
-                                                color = if (isDarkMode) Color.White.copy(alpha = 0.5f) else Color(0xFF6E6E73),
-                                                fontSize = 12.sp,
-                                                maxLines = 1,
-                                                overflow = TextOverflow.Ellipsis
-                                            )
-                                        }
-
-                                        var showSearchMenu by remember { mutableStateOf(false) }
-                                        Box {
-                                            IconButton(onClick = { showSearchMenu = true }) {
-                                                Icon(
-                                                    imageVector = Icons.Default.MoreVert,
-                                                    contentDescription = "Options",
-                                                    tint = if (isDarkMode) Color.White.copy(alpha = 0.7f) else Color(0xFF3A3A3C),
-                                                    modifier = Modifier.size(20.dp)
+                                            val thumbModel = track.artworkUrl ?: "content://media/external/audio/albumart/${track.albumId}"
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(40.dp)
+                                                    .clip(RoundedCornerShape(8.dp))
+                                                    .background(Color.White.copy(alpha = 0.1f)),
+                                                contentAlignment = Alignment.Center
+                                            ) {
+                                                com.akshay.musicplayer.ui.components.SmartArtworkImage(
+                                                    artworkUrl = thumbModel,
+                                                    contentDescription = null,
+                                                    modifier = Modifier.fillMaxSize(),
+                                                    thumbnailQuality = "Low (Fast)"
                                                 )
                                             }
-                                            androidx.compose.material3.MaterialTheme(
-                                                colorScheme = androidx.compose.material3.MaterialTheme.colorScheme.copy(
-                                                    surface = if (isDarkMode) (if (isPureBlack) Color(0xFF141416) else Color(0xFF1E1E24)) else Color(0xFFFFFFFF)
-                                                ),
-                                                shapes = androidx.compose.material3.MaterialTheme.shapes.copy(
-                                                    extraSmall = RoundedCornerShape(12.dp)
+    
+                                            Column(modifier = Modifier.weight(1f)) {
+                                                Text(
+                                                    text = track.title,
+                                                    color = if (isDarkMode) Color.White else Color(0xFF1D1D1F),
+                                                    fontSize = 14.sp,
+                                                    fontWeight = FontWeight.Medium,
+                                                    maxLines = 1,
+                                                    overflow = TextOverflow.Ellipsis
                                                 )
-                                            ) {
-                                                DropdownMenu(
-                                                    expanded = showSearchMenu,
-                                                    onDismissRequest = { showSearchMenu = false }
+                                                Text(
+                                                    text = track.artist,
+                                                    color = if (isDarkMode) Color.White.copy(alpha = 0.5f) else Color(0xFF6E6E73),
+                                                    fontSize = 12.sp,
+                                                    maxLines = 1,
+                                                    overflow = TextOverflow.Ellipsis
+                                                )
+                                            }
+    
+                                            var showSearchMenu by remember { mutableStateOf(false) }
+                                            Box {
+                                                IconButton(onClick = { showSearchMenu = true }) {
+                                                    Icon(
+                                                        imageVector = Icons.Default.MoreVert,
+                                                        contentDescription = "Options",
+                                                        tint = if (isDarkMode) Color.White.copy(alpha = 0.7f) else Color(0xFF3A3A3C),
+                                                        modifier = Modifier.size(20.dp)
+                                                    )
+                                                }
+                                                androidx.compose.material3.MaterialTheme(
+                                                    colorScheme = androidx.compose.material3.MaterialTheme.colorScheme.copy(
+                                                        surface = if (isDarkMode) (if (isPureBlack) Color(0xFF141416) else Color(0xFF1E1E24)) else Color(0xFFFFFFFF)
+                                                    ),
+                                                    shapes = androidx.compose.material3.MaterialTheme.shapes.copy(
+                                                        extraSmall = RoundedCornerShape(12.dp)
+                                                    )
                                                 ) {
-                                                    DropdownMenuItem(
-                                                        text = { Text("Play Next", color = if (isDarkMode) Color.White else Color(0xFF1D1D1F)) },
-                                                        onClick = {
-                                                            showSearchMenu = false
-                                                            viewModel.playNext(track)
-                                                            android.widget.Toast.makeText(context, "Playing next: \"${track.title}\"", android.widget.Toast.LENGTH_SHORT).show()
-                                                        }
-                                                    )
-                                                    DropdownMenuItem(
-                                                        text = { Text("Add to Queue", color = if (isDarkMode) Color.White else Color(0xFF1D1D1F)) },
-                                                        onClick = {
-                                                            showSearchMenu = false
-                                                            viewModel.addToQueue(track)
-                                                            android.widget.Toast.makeText(context, "Added to queue: \"${track.title}\"", android.widget.Toast.LENGTH_SHORT).show()
-                                                        }
-                                                    )
-                                                    DropdownMenuItem(
-                                                        text = { Text("Add to Playlist", color = if (isDarkMode) Color.White else Color(0xFF1D1D1F)) },
-                                                        onClick = {
-                                                            showSearchMenu = false
-                                                            selectedTrackForPlaylist = track
-                                                        }
-                                                    )
+                                                    DropdownMenu(
+                                                        expanded = showSearchMenu,
+                                                        onDismissRequest = { showSearchMenu = false }
+                                                    ) {
+                                                        DropdownMenuItem(
+                                                            text = { Text("Play Next", color = if (isDarkMode) Color.White else Color(0xFF1D1D1F)) },
+                                                            onClick = {
+                                                                showSearchMenu = false
+                                                                viewModel.playNext(track)
+                                                                android.widget.Toast.makeText(context, "Playing next: \"${track.title}\"", android.widget.Toast.LENGTH_SHORT).show()
+                                                            }
+                                                        )
+                                                        DropdownMenuItem(
+                                                            text = { Text("Add to Queue", color = if (isDarkMode) Color.White else Color(0xFF1D1D1F)) },
+                                                            onClick = {
+                                                                showSearchMenu = false
+                                                                viewModel.addToQueue(track)
+                                                                android.widget.Toast.makeText(context, "Added to queue: \"${track.title}\"", android.widget.Toast.LENGTH_SHORT).show()
+                                                            }
+                                                        )
+                                                        DropdownMenuItem(
+                                                            text = { Text("Add to Playlist", color = if (isDarkMode) Color.White else Color(0xFF1D1D1F)) },
+                                                            onClick = {
+                                                                showSearchMenu = false
+                                                                selectedTrackForPlaylist = track
+                                                            }
+                                                        )
+                                                    }
                                                 }
                                             }
                                         }
@@ -823,9 +824,62 @@ fun MainScreen(viewModel: PlayerViewModel) {
                     playlist = selectedPlaylist!!,
                     viewModel = viewModel,
                     onBack = { selectedPlaylist = null },
-                    onNavigateToPlayer = {
-                        selectedPlaylist = null
-                        navigateToPlayer()
+                    onNavigateToPlayer = navigateToPlayerFromLocalPlaylist
+                )
+            }
+
+            if (selectedMuesoPlaylist != null) {
+                val playlist = onlinePlaylists.firstOrNull { it.id == selectedMuesoPlaylist?.id } ?: selectedMuesoPlaylist!!
+                val playlistTracksFlow = remember(playlist.id) { viewModel.getOnlinePlaylistTracks(playlist.id) }
+                val playlistTracks by playlistTracksFlow.collectAsState(initial = emptyList())
+                val playlistAddedDates by remember(playlist.id) { viewModel.getOnlinePlaylistTrackAddedDates(playlist.id) }
+                    .collectAsState(initial = emptyMap())
+                OnlinePlaylistDetailScreen(
+                    title = playlist.name,
+                    subtitle = "${playlistTracks.size} tracks",
+                    description = playlist.description,
+                    gradientColors = listOf(Color(0xFF8E2DE2), Color(0xFF4A00E0)),
+                    tracks = playlistTracks,
+                    isLoading = false,
+                    isCustomUserPlaylist = true,
+                    isDarkMode = isDarkMode,
+                    viewModel = viewModel,
+                    spotifyUrl = playlist.spotifyUrl,
+                    artworkUrl = playlist.artworkUrl,
+                    onDownloadTrack = { track -> viewModel.downloadOnlineTrack(context, track) },
+                    onRenamePlaylist = { viewModel.renameOnlinePlaylist(playlist.id, it) },
+                    onDeletePlaylist = {
+                        viewModel.deleteOnlinePlaylist(playlist.id)
+                        selectedMuesoPlaylist = null
+                    },
+                    onBackClick = { selectedMuesoPlaylist = null },
+                    onPlayAllClick = {
+                        if (playlistTracks.isNotEmpty()) {
+                            if (viewModel.playOnlinePlaylist(playlistTracks, 0)) {
+                                navigateToPlayerFromMuesoPlaylist()
+                            }
+                        }
+                    },
+                    onShuffleClick = {
+                        if (playlistTracks.isNotEmpty()) {
+                            if (viewModel.playOnlineShuffle(playlistTracks)) {
+                                navigateToPlayerFromMuesoPlaylist()
+                            }
+                        }
+                    },
+                    onTrackClick = { index ->
+                        if (viewModel.playOnlinePlaylist(playlistTracks, index)) {
+                            navigateToPlayerFromMuesoPlaylist()
+                        }
+                    },
+                    onRemoveTrack = { track -> viewModel.removeTrackFromOnlinePlaylist(playlist.id, track.id) },
+                    onMoveTrack = { fromIndex, toIndex -> viewModel.moveTrackInOnlinePlaylist(playlist.id, fromIndex, toIndex) },
+                    sortKey = "mueso_${playlist.id}",
+                    addedDates = playlistAddedDates,
+                    onPlayTracks = { shown, index ->
+                        if (viewModel.playOnlinePlaylist(shown, index)) {
+                            navigateToPlayerFromMuesoPlaylist()
+                        }
                     }
                 )
             }
@@ -894,23 +948,69 @@ fun MainScreen(viewModel: PlayerViewModel) {
                         onBackClick = { viewModel.closeSelectedOnlinePlaylist() },
                         onPlayAllClick = {
                             if (playlistTracks.isNotEmpty()) {
-                                viewModel.playOnlinePlaylist(playlistTracks, 0, pl)
-                                viewModel.closeSelectedOnlinePlaylist()
-                                navigateToPlayer()
+                                if (viewModel.playOnlinePlaylist(playlistTracks, 0, pl)) {
+                                    navigateToPlayerFromOnlinePlaylist(pl)
+                                }
                             }
                         },
                         onShuffleClick = {
                             if (playlistTracks.isNotEmpty()) {
-                                viewModel.playOnlinePlaylist(playlistTracks.shuffled(), 0, pl)
-                                viewModel.closeSelectedOnlinePlaylist()
-                                navigateToPlayer()
+                                if (viewModel.playOnlinePlaylist(playlistTracks.shuffled(), 0, pl)) {
+                                    navigateToPlayerFromOnlinePlaylist(pl)
+                                }
                             }
                         },
                         onTrackClick = { idx ->
-                            viewModel.playOnlinePlaylist(playlistTracks, idx, pl)
-                            viewModel.closeSelectedOnlinePlaylist()
-                            navigateToPlayer()
+                            if (viewModel.playOnlinePlaylist(playlistTracks, idx, pl)) {
+                                navigateToPlayerFromOnlinePlaylist(pl)
+                            }
                         }
+                    )
+                }
+            }
+
+            // Keep the mini player pinned to the bottom everywhere: on top of playlist / artist pages
+            // (classic layout, where the bottom bar is covered), and on every page of the swipe layout
+            // except the player page itself.
+            val isDetailOverlayOpen = selectedPlaylist != null || selectedMuesoPlaylist != null ||
+                selectedOnlinePlaylist != null || selectedArtistPage != null
+            val showBottomMiniPlayer = currentTrack != null && if (isClassic) {
+                !isClassicPlayerExpanded
+            } else {
+                isDetailOverlayOpen || pagerState.currentPage != 1
+            }
+            run {
+                androidx.compose.animation.AnimatedVisibility(
+                    visible = showBottomMiniPlayer,
+                    enter = androidx.compose.animation.fadeIn(animationSpec = tween(180, delayMillis = 60)) +
+                            androidx.compose.animation.scaleIn(initialScale = 0.88f, transformOrigin = TransformOrigin(0.5f, 0.5f)),
+                    exit = androidx.compose.animation.fadeOut(animationSpec = tween(150)) +
+                            androidx.compose.animation.scaleOut(targetScale = 0.88f, transformOrigin = TransformOrigin(0.5f, 0.5f)),
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .navigationBarsPadding()
+                        .padding(bottom = 10.dp)
+                ) {
+                    DockedMiniPlayer(
+                        track = currentTrack,
+                        playbackState = playbackState,
+                        audioFormat = activeAudioFormat,
+                        isDarkMode = isDarkMode,
+                        onExpandClick = {
+                            val onlinePl = selectedOnlinePlaylist
+                            when {
+                                selectedPlaylist != null -> navigateToPlayerFromLocalPlaylist()
+                                selectedMuesoPlaylist != null -> navigateToPlayerFromMuesoPlaylist()
+                                onlinePl != null -> navigateToPlayerFromOnlinePlaylist(onlinePl)
+                                else -> {
+                                    viewModel.closeArtist()
+                                    navigateToPlayer()
+                                }
+                            }
+                        },
+                        onPlayPauseClick = { viewModel.togglePlayPause() },
+                        onPreviousClick = { viewModel.playPreviousTrack() },
+                        onNextClick = { viewModel.playNextTrack() }
                     )
                 }
             }
@@ -948,6 +1048,29 @@ fun MainScreen(viewModel: PlayerViewModel) {
             )
         }
 
+
+        // Floating skip-countdown bubble (red while counting down, green once skipping is allowed)
+        // plus a second bubble for the fast-forward wait. Both hide 3s after turning green.
+        val skipCountdown by viewModel.skipCountdown.collectAsState()
+        val forwardCountdown by viewModel.forwardCountdown.collectAsState()
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .statusBarsPadding()
+                .padding(top = 72.dp, end = 16.dp),
+            contentAlignment = Alignment.TopEnd
+        ) {
+            androidx.compose.foundation.layout.Column(
+                horizontalAlignment = Alignment.End,
+                verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(12.dp)
+            ) {
+                com.akshay.musicplayer.ui.components.SkipCountdownBubble(countdown = skipCountdown)
+                com.akshay.musicplayer.ui.components.SkipCountdownBubble(
+                    countdown = forwardCountdown,
+                    readyDescription = "Fast-forward allowed"
+                )
+            }
+        }
 
         // First-Launch Google Drive Backup Onboarding Dialog
         if (showOnboardingDialog) {

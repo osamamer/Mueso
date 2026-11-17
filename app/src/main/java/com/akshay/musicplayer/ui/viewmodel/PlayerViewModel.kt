@@ -5,6 +5,10 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.media3.common.Player
 import com.akshay.musicplayer.domain.models.TrackEntity
+import com.akshay.musicplayer.domain.models.BlacklistRule
+import com.akshay.musicplayer.data.BlacklistManager
+import com.akshay.musicplayer.media.service.SkipAttemptGate
+import com.akshay.musicplayer.media.service.SkipRefusalFeedback
 import com.akshay.musicplayer.domain.usecase.GetLocalTracksUseCase
 import com.akshay.musicplayer.media.player.MediaPlayerController
 import com.akshay.musicplayer.media.player.PlayerEvent
@@ -20,7 +24,9 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
@@ -54,6 +60,8 @@ data class DownloadProgress(
     val error: String? = null
 )
 
+private const val MIN_TRACKS_FOR_REPEAT_ALL = 3
+
 class PlayerViewModel(
     private val getLocalTracksUseCase: GetLocalTracksUseCase,
     val mediaPlayerController: MediaPlayerController,
@@ -63,6 +71,13 @@ class PlayerViewModel(
 ) : ViewModel() {
 
     private val onlineRepository = OnlineMusicRepository()
+    private val blacklistManager = BlacklistManager(sharedPreferences)
+    val blacklistRules: StateFlow<List<BlacklistRule>> = blacklistManager.rules
+    private val skipAttemptGate = SkipAttemptGate
+    val skipCountdown: StateFlow<com.akshay.musicplayer.media.service.SkipCountdown?> = SkipAttemptGate.countdown
+    val forwardCountdown: StateFlow<com.akshay.musicplayer.media.service.SkipCountdown?> = com.akshay.musicplayer.media.service.RewindGate.forwardCountdown
+    private val _skipRefusalEvents = MutableStateFlow(0L)
+    val skipRefusalEvents: StateFlow<Long> = _skipRefusalEvents.asStateFlow()
 
     private val _allLocalTracks = MutableStateFlow<List<TrackEntity>>(emptyList())
     val allLocalTracks: StateFlow<List<TrackEntity>> = _allLocalTracks.asStateFlow()
@@ -126,6 +141,7 @@ class PlayerViewModel(
         onlinePlaylistDao = onlinePlaylistDao,
         coroutineScope = viewModelScope,
         markDirty = { backupManager.markDirty() },
+        prefs = sharedPreferences,
         onYouTubeRefresh = { youtubeAuthManager.refreshLibrary() }
     )
     val updateManager = com.akshay.musicplayer.ui.viewmodel.managers.UpdateManager(viewModelScope)
@@ -273,7 +289,10 @@ class PlayerViewModel(
     fun setAudioQuality(quality: String) = settingsManager.setAudioQuality(quality)
     fun setThumbnailQuality(quality: String) = settingsManager.setThumbnailQuality(quality)
     fun setDownloadQuality(quality: String) = settingsManager.setDownloadQuality(quality)
-    fun setDownloadFolder(folder: String) = settingsManager.setDownloadFolder(folder)
+    fun setDownloadFolder(folder: String) {
+        settingsManager.setDownloadFolder(folder)
+        loadLocalTracks(forceReload = true)
+    }
     fun setEnableLyrics(enabled: Boolean) = settingsManager.setEnableLyrics(enabled)
     fun setEmbedLyricsInDownload(enabled: Boolean) = settingsManager.setEmbedLyricsInDownload(enabled)
     fun setPreferredLanguage(language: String) {
@@ -287,6 +306,16 @@ class PlayerViewModel(
     fun setSkipInteraction(enabled: Boolean) = settingsManager.setSkipInteraction(enabled)
     fun setSkipIntroOutro(enabled: Boolean) = settingsManager.setSkipIntroOutro(enabled)
     fun setSkipNonMusicOffTopic(enabled: Boolean) = settingsManager.setSkipNonMusicOffTopic(enabled)
+    fun addBlacklistRule(rule: BlacklistRule) = blacklistManager.addRule(rule)
+    fun removeBlacklistRule(ruleId: String) = blacklistManager.removeRule(ruleId)
+    suspend fun searchBlacklistSongs(query: String): List<TrackEntity> {
+        val cleanedQuery = query.trim()
+        if (cleanedQuery.length < 2) return emptyList()
+        return onlineRepository.searchOnlineTracks(cleanedQuery)
+            .let { OnlineMusicRepository.rankTracks(it, cleanedQuery) }
+            .distinctBy { it.id }
+            .take(12)
+    }
 
     val audioEffectsController = com.akshay.musicplayer.media.player.AudioEffectsController.getInstance(com.akshay.musicplayer.AppContainer.getContext())
 
@@ -525,16 +554,22 @@ class PlayerViewModel(
     fun createPlaylist(name: String, onCreated: ((Long) -> Unit)? = null) = playlistManager.createPlaylist(name, onCreated)
     fun deletePlaylist(playlistId: Long) = playlistManager.deletePlaylist(playlistId)
     fun renamePlaylist(playlistId: Long, newName: String) = playlistManager.renamePlaylist(playlistId, newName)
+    fun setPlaylistPinned(playlistId: Long, isPinned: Boolean) = playlistManager.setPlaylistPinned(playlistId, isPinned)
+    fun reorderPlaylists(orderedIds: List<Long>) = playlistManager.reorderPlaylists(orderedIds)
+    fun reorderOnlinePlaylists(orderedIds: List<Long>) = playlistManager.reorderOnlinePlaylists(orderedIds)
     fun addTrackToPlaylist(playlistId: Long, trackId: Long) = playlistManager.addTrackToPlaylist(playlistId, trackId)
     fun addTracksToPlaylist(playlistId: Long, trackIds: List<Long>) = playlistManager.addTracksToPlaylist(playlistId, trackIds)
     fun removeTrackFromPlaylist(playlistId: Long, trackId: Long) = playlistManager.removeTrackFromPlaylist(playlistId, trackId)
     fun moveTrackInPlaylist(playlistId: Long, fromIndex: Int, toIndex: Int) = playlistManager.moveTrackInPlaylist(playlistId, fromIndex, toIndex)
     fun getPlaylistTracks(playlistId: Long) = playlistManager.getPlaylistTracks(playlistId)
+    fun getPlaylistTrackAddedDates(playlistId: Long) = playlistManager.getPlaylistTrackAddedDates(playlistId)
+    fun getOnlinePlaylistTrackAddedDates(playlistId: Long) = playlistManager.getOnlinePlaylistTrackAddedDates(playlistId)
     fun touchPlaylist(playlistId: Long) = playlistManager.touchPlaylist(playlistId)
     fun touchOnlinePlaylist(playlistId: Long) = playlistManager.touchOnlinePlaylist(playlistId)
     fun createOnlinePlaylist(name: String, description: String? = null, onCreated: ((Long) -> Unit)? = null) = playlistManager.createOnlinePlaylist(name, description, onCreated)
     fun deleteOnlinePlaylist(playlistId: Long) = playlistManager.deleteOnlinePlaylist(playlistId)
     fun renameOnlinePlaylist(playlistId: Long, newName: String) = playlistManager.renameOnlinePlaylist(playlistId, newName)
+    fun setOnlinePlaylistPinned(playlistId: Long, isPinned: Boolean) = playlistManager.setOnlinePlaylistPinned(playlistId, isPinned)
     fun addTrackToOnlinePlaylist(playlistId: Long, track: com.akshay.musicplayer.domain.models.TrackEntity) = playlistManager.addTrackToOnlinePlaylist(playlistId, track)
     fun addTracksToOnlinePlaylist(playlistId: Long, tracks: List<com.akshay.musicplayer.domain.models.TrackEntity>) = playlistManager.addTracksToOnlinePlaylist(playlistId, tracks)
     fun removeTrackFromOnlinePlaylist(playlistId: Long, trackId: Long) = playlistManager.removeTrackFromOnlinePlaylist(playlistId, trackId)
@@ -568,10 +603,21 @@ class PlayerViewModel(
     val spotifyMatchProgress = spotifyImportManager.matchProgress
     val spotifyErrorMessage = spotifyImportManager.errorMessage
     val spotifyCreatedDestination = spotifyImportManager.createdDestination
+    val spotifyBulkImportProgress = spotifyImportManager.bulkImportProgress
     val spotifySyncTargetPlaylistName = spotifyImportManager.syncTargetPlaylistName
     val spotifyIsSyncMode: Boolean get() = spotifyImportManager.isSyncMode
 
     fun fetchSpotifyPlaylist(context: android.content.Context, url: String) = spotifyImportManager.fetchAndMatch(context, url)
+    fun importSpotifyPlaylistsFromJson(context: android.content.Context, uri: android.net.Uri) =
+        spotifyImportManager.importPlaylistsFromJson(context, uri)
+    fun cancelSpotifyBulkImport() = spotifyImportManager.cancelBulkImport()
+    val spotifyMetadataRefresh = spotifyImportManager.metadataRefresh
+    fun refreshSpotifyPlaylistsFromJson(context: android.content.Context, uri: android.net.Uri) =
+        spotifyImportManager.refreshImportedPlaylistsFromJson(context, uri)
+    fun clearSpotifyMetadataRefreshMessage() = spotifyImportManager.clearMetadataRefreshMessage()
+    val spotifyClientId = spotifyImportManager.spotifyClientId
+    fun startSpotifyLogin(context: android.content.Context, clientId: String) = spotifyImportManager.startSpotifyLogin(context, clientId)
+    fun handleSpotifyLoginCallback(context: android.content.Context, uri: android.net.Uri) = spotifyImportManager.handleSpotifyLoginCallback(context, uri)
     fun syncSpotifyPlaylist(
         context: android.content.Context,
         playlistId: Long,
@@ -646,6 +692,9 @@ class PlayerViewModel(
 
     override fun onCleared() {
         super.onCleared()
+        com.akshay.musicplayer.media.service.MediaSessionBridge.onUserNextRequested = null
+        com.akshay.musicplayer.media.service.MediaSessionBridge.onUserPreviousRequested = null
+        com.akshay.musicplayer.media.service.MediaSessionBridge.onSkipRefused = null
         previewJobs.forEach { j -> j.cancel() }
         previewPlayer?.release()
         previewPlayer = null
@@ -755,6 +804,10 @@ class PlayerViewModel(
 
     private val _playlistTrackCount = MutableStateFlow(0)
     val playlistTrackCount: StateFlow<Int> = _playlistTrackCount.asStateFlow()
+
+    /** "mueso_<id>" / "local_<id>" of the playlist the current queue was started from. */
+    private val _activePlaylistKey = MutableStateFlow<String?>(null)
+    val activePlaylistKey: StateFlow<String?> = _activePlaylistKey.asStateFlow()
 
     private val _currentPlayingPlaylist = MutableStateFlow<SelectedOnlinePlaylist?>(null)
     val currentPlayingPlaylist: StateFlow<SelectedOnlinePlaylist?> = _currentPlayingPlaylist.asStateFlow()
@@ -975,6 +1028,10 @@ class PlayerViewModel(
         loadLocalTracks()
         observePlaybackState()
         observeMediaEvents()
+        observePlaylistRecency()
+        com.akshay.musicplayer.media.service.MediaSessionBridge.onUserNextRequested = { playNextTrack() }
+        com.akshay.musicplayer.media.service.MediaSessionBridge.onUserPreviousRequested = { playPreviousTrack() }
+        com.akshay.musicplayer.media.service.MediaSessionBridge.onSkipRefused = { publishSkipRefusal() }
         youtubeAuthManager.onSessionChanged = {
             loadExploreAndCharts()
         }
@@ -1055,12 +1112,11 @@ class PlayerViewModel(
         tracks: List<TrackEntity>,
         startIndex: Int = 0,
         playlistInfo: SelectedOnlinePlaylist? = null
-    ) {
-        if (tracks.isEmpty()) return
-        _isPlaylistContext.value = true
-        _playlistTrackCount.value = tracks.size
+    ): Boolean {
+        if (tracks.isEmpty()) return false
+        if (!playQueue(tracks, startIndex)) return false
         _currentPlayingPlaylist.value = playlistInfo
-        playQueue(tracks, startIndex)
+        return true
     }
 
     private suspend fun resolveTrack(track: TrackEntity): TrackEntity {
@@ -1511,7 +1567,23 @@ class PlayerViewModel(
         viewModelScope.launch {
             mediaPlayerController.playbackState().collect { state ->
                 val oldTrackId = _playbackState.value.currentTrackId
+                val wasPlaying = _playbackState.value.isPlaying
                 _playbackState.value = state
+                if (oldTrackId != state.currentTrackId) {
+                    skipAttemptGate.onCurrentTrackChanged(state.currentTrackId?.toString())
+                    com.akshay.musicplayer.media.service.RewindGate.onCurrentTrackChanged(state.currentTrackId?.toString())
+                }
+                if (state.isPlaying && state.currentTrackId != null) {
+                    skipAttemptGate.onTrackPlaying(state.currentTrackId.toString())
+                } else if (wasPlaying && state.durationMs > 0L &&
+                    state.currentPositionMs >= state.durationMs - 1_000L
+                ) {
+                    // Track ran to completion and stopped: nothing left to protect.
+                    skipAttemptGate.release()
+                } else if (!state.isPlaying && state.currentTrackId != null) {
+                    // Paused: the 5-second clock runs from the pause, not from the next tap.
+                    skipAttemptGate.onTrackPaused(state.currentTrackId.toString())
+                }
 
                 if (oldTrackId != state.currentTrackId) {
                     Log.d("MUESO_SYNC", "ViewModel observePlaybackState: oldTrackId=$oldTrackId, newTrackId=${state.currentTrackId}, lastRequested=$lastRequestedTrackId")
@@ -1526,6 +1598,7 @@ class PlayerViewModel(
                 if (state.currentTrackId != null) {
                     val currentTrackIdx = currentTracks.indexOfFirst { it.id == state.currentTrackId }
                     if (currentTrackIdx >= 0) {
+                        val currentTrack = currentTracks[currentTrackIdx]
                         // Check if player stepped past the end of an active playlist
                         if (_isPlaylistContext.value && _playlistTrackCount.value > 0) {
                             val count = _playlistTrackCount.value
@@ -2194,7 +2267,7 @@ class PlayerViewModel(
             return
         }
 
-        playNextTrack()
+        advanceToNextTrack()
     }
 
     private fun observeMediaEvents() {
@@ -2262,7 +2335,7 @@ class PlayerViewModel(
                         } else {
                             Log.w("MUESO_STREAM", "Playback error encountered: ${event.message}. Auto-advancing to next track.")
                             delay(500)
-                            playNextTrack()
+                            advanceToNextTrack()
                         }
                     }
                 }
@@ -2270,9 +2343,78 @@ class PlayerViewModel(
         }
     }
 
+    /**
+     * Spotify-style "Recents": works out which playlist the queue came from (whatever screen
+     * started it) and, after [RECENT_PLAY_MIN_MS] of real playback, stamps its lastPlayedAt.
+     * While it keeps playing, the stamp is refreshed every [RECENT_PLAY_REFRESH_MS] so a long
+     * session stays on top.
+     */
+    private fun observePlaylistRecency() {
+        viewModelScope.launch {
+            combine(
+                activeQueue,
+                _playlistTrackCount,
+                _isPlaylistContext,
+                _playbackState.map { it.currentTrackId }.distinctUntilChanged()
+            ) { queue, count, isPlaylist, currentId ->
+                if (!isPlaylist || currentId == null || queue.isEmpty()) return@combine null
+                val head = queue.take(if (count > 0) count else queue.size).map { it.id }.toSet()
+                if (currentId in head) head to currentId else null
+            }
+                .distinctUntilChanged { a, b -> a?.first == b?.first }
+                .collectLatest { signature ->
+                    _activePlaylistKey.value = signature?.let { (ids, currentId) ->
+                        withContext(Dispatchers.IO) {
+                            runCatching { playlistManager.findPlaylistKeyForQueue(ids, currentId) }.getOrNull()
+                        }
+                    }
+                }
+        }
+        viewModelScope.launch {
+            combine(_activePlaylistKey, _playbackState.map { it.isPlaying }.distinctUntilChanged()) { key, playing ->
+                if (playing) key else null
+            }
+                .distinctUntilChanged()
+                .collectLatest { key ->
+                    if (key == null) return@collectLatest
+                    delay(RECENT_PLAY_MIN_MS)
+                    while (isActive) {
+                        withContext(Dispatchers.IO) { runCatching { playlistManager.markPlaylistKeyPlayed(key) } }
+                        delay(RECENT_PLAY_REFRESH_MS)
+                    }
+                }
+        }
+    }
+
     private var lastUserSkipTime: Long = 0
+    private fun canManuallyChangeTrack(targetTrackId: Long?): Boolean {
+        val state = _playbackState.value
+        val currentTrackId = state.currentTrackId ?: return true
+        if (targetTrackId == currentTrackId) return true
+
+        if (skipAttemptGate.shouldRefuse(currentTrackId.toString(), state.currentPositionMs, state.durationMs)) {
+            val context = com.akshay.musicplayer.AppContainer.getContext()
+            SkipRefusalFeedback.playTone(context)
+            publishSkipRefusal()
+            return false
+        }
+        return true
+    }
 
     fun playNextTrack() {
+        lastUserSkipTime = System.currentTimeMillis()
+        val currentIndex = getCurrentTrackIndex()
+        val nextIndex = if (currentIndex + 1 in currentTracks.indices) currentIndex + 1 else 0
+        val targetTrackId = currentTracks.getOrNull(nextIndex)?.id
+        if (targetTrackId != null && !canManuallyChangeTrack(targetTrackId)) return
+        advanceToNextTrack()
+    }
+
+    private fun publishSkipRefusal() {
+        _skipRefusalEvents.value += 1L
+    }
+
+    private fun advanceToNextTrack() {
         lastUserSkipTime = System.currentTimeMillis()
         val curTrackId = _playbackState.value.currentTrackId
         val curIdx = if (curTrackId != null) currentTracks.indexOfFirst { it.id == curTrackId } else -1
@@ -2305,6 +2447,9 @@ class PlayerViewModel(
         lastUserSkipTime = System.currentTimeMillis()
         val curTrackId = _playbackState.value.currentTrackId
         val curIdx = if (curTrackId != null) currentTracks.indexOfFirst { it.id == curTrackId } else -1
+        val previousIndex = if (curIdx > 0) curIdx - 1 else currentTracks.lastIndex
+        val targetTrackId = currentTracks.getOrNull(previousIndex)?.id
+        if (targetTrackId != null && !canManuallyChangeTrack(targetTrackId)) return
         val isPlaylist = _isPlaylistContext.value && _playlistTrackCount.value > 0
 
         if (isPlaylist && curIdx <= 0 && _repeatMode.value == Player.REPEAT_MODE_ALL) {
@@ -2327,17 +2472,53 @@ class PlayerViewModel(
 
     private var originalUnshuffledTracks: List<TrackEntity>? = null
 
-    fun playQueue(tracks: List<TrackEntity>, startIndex: Int = 0, isPlaylist: Boolean = true) {
+    fun playQueue(tracks: List<TrackEntity>, startIndex: Int = 0, isPlaylist: Boolean = true): Boolean {
+        val playableTracks = tracks.filterNot { blacklistManager.isBlocked(it) }
+        if (playableTracks.isEmpty()) {
+            mediaPlayerController.pause()
+            android.widget.Toast.makeText(
+                com.akshay.musicplayer.AppContainer.getContext(),
+                if (tracks.isEmpty()) "There are no tracks to play." else "All tracks in this queue are blocked.",
+                android.widget.Toast.LENGTH_SHORT
+            ).show()
+            return false
+        }
+
+        val requestedTrackId = tracks.getOrNull(startIndex)?.id
+            ?: playableTracks.firstOrNull()?.id
+        if (requestedTrackId != null && !canManuallyChangeTrack(requestedTrackId)) return false
+
+        val requestedTrack = tracks.getOrNull(startIndex)
+        val startTrack = when {
+            requestedTrack == null -> playableTracks.firstOrNull()
+            !blacklistManager.isBlocked(requestedTrack) -> requestedTrack
+            else -> tracks.drop((startIndex + 1).coerceAtLeast(0)).firstOrNull { !blacklistManager.isBlocked(it) }
+                ?: if (_repeatMode.value == Player.REPEAT_MODE_ALL) {
+                    tracks.take(startIndex.coerceAtLeast(0)).firstOrNull { !blacklistManager.isBlocked(it) }
+                } else null
+        }
+        if (startTrack == null) {
+            mediaPlayerController.pause()
+            android.widget.Toast.makeText(
+                com.akshay.musicplayer.AppContainer.getContext(),
+                "No unblocked tracks are available after this selection.",
+                android.widget.Toast.LENGTH_SHORT
+            ).show()
+            return false
+        }
+        val playableStartIndex = playableTracks.indexOfFirst { it.id == startTrack.id }.coerceAtLeast(0)
+
         if (isPlaylist) {
             _isPlaylistContext.value = true
-            _playlistTrackCount.value = tracks.size
+            _playlistTrackCount.value = playableTracks.size
+            _currentPlayingPlaylist.value = null
         } else {
             _isPlaylistContext.value = false
             _playlistTrackCount.value = 0
             _currentPlayingPlaylist.value = null
         }
         originalUnshuffledTracks = null
-        val target = if (startIndex in tracks.indices) tracks[startIndex] else null
+        val target = playableTracks.getOrNull(playableStartIndex)
         _lyricsOffsetMs.value = target?.let { sharedPreferences.getLong("lyrics_offset_${it.id}", 0L) } ?: 0L
         lastUserSkipTime = System.currentTimeMillis()
         cancelRestoration()
@@ -2348,25 +2529,35 @@ class PlayerViewModel(
             _resolvingTrackTitle.value = target?.title
             _isResolvingTrack.value = true
         }
-        currentTracks = tracks.toList()
+        currentTracks = playableTracks
         viewModelScope.launch(Dispatchers.IO) {
-            val mutableTracks = tracks.toMutableList()
-            if (startIndex in mutableTracks.indices) {
-                mutableTracks[startIndex] = resolveTrack(mutableTracks[startIndex])
+            val mutableTracks = playableTracks.toMutableList()
+            if (playableStartIndex in mutableTracks.indices) {
+                mutableTracks[playableStartIndex] = resolveTrack(mutableTracks[playableStartIndex])
             }
 
             withContext(Dispatchers.Main) {
                 _isResolvingTrack.value = false
                 _resolvingTrackTitle.value = null
                 currentTracks = mutableTracks
-                mediaPlayerController.setPlaylistAndPlay(currentTracks, startIndex)
-                prefetchAndKeepQueueAlive(startIndex)
-                warmNextTrack(startIndex + 1)
+                mediaPlayerController.setPlaylistAndPlay(currentTracks, playableStartIndex)
+                prefetchAndKeepQueueAlive(playableStartIndex)
+                warmNextTrack(playableStartIndex + 1)
             }
         }
+        return true
     }
 
     fun playTrack(track: TrackEntity) {
+        if (blacklistManager.isBlocked(track)) {
+            android.widget.Toast.makeText(
+                com.akshay.musicplayer.AppContainer.getContext(),
+                "This track is on your blacklist.",
+                android.widget.Toast.LENGTH_SHORT
+            ).show()
+            return
+        }
+        if (!canManuallyChangeTrack(track.id)) return
         playTrackJob?.cancel()
         activeCurrentStreamJob?.cancel()
         activeNextStreamJob?.cancel()
@@ -2445,9 +2636,28 @@ class PlayerViewModel(
     fun playTrackAtIndex(index: Int) {
         lastUserSkipTime = System.currentTimeMillis()
         if (index >= 0 && index < currentTracks.size) {
-            val track = currentTracks[index]
+            val selectedTrack = currentTracks[index]
+            val trackIndex = if (blacklistManager.isBlocked(selectedTrack)) {
+                findNextAllowedTrackIndex(index + 1)
+            } else {
+                index
+            }
+            if (trackIndex == null) {
+                mediaPlayerController.pause()
+                android.widget.Toast.makeText(
+                    com.akshay.musicplayer.AppContainer.getContext(),
+                    "No unblocked tracks are available in this queue.",
+                    android.widget.Toast.LENGTH_SHORT
+                ).show()
+                return
+            }
+            if (trackIndex != index) {
+                playTrackAtIndex(trackIndex)
+                return
+            }
+            val track = currentTracks[trackIndex]
             lastRequestedTrackId = track.id
-            if (index >= _playlistTrackCount.value) {
+            if (trackIndex >= _playlistTrackCount.value) {
                 // Stepped past the playlist boundary into radio recommendations
                 _isPlaylistContext.value = false
                 _playlistTrackCount.value = 0
@@ -2458,15 +2668,15 @@ class PlayerViewModel(
 
             // If mediaPlayerController doesn't have currentTracks loaded, set and play!
             if (mediaPlayerController.getCurrentQueue() != currentTracks) {
-                mediaPlayerController.setPlaylistAndPlay(currentTracks, index)
-                warmNextTrack(index + 1)
+                mediaPlayerController.setPlaylistAndPlay(currentTracks, trackIndex)
+                warmNextTrack(trackIndex + 1)
                 return
             }
 
             val isUnresolvedOrExpired = track.filePath.startsWith("online:") &&
                     (track.filePath.removePrefix("online:").contains(" ") || track.filePath.removePrefix("online:").length != 11)
             if (isUnresolvedOrExpired) {
-                Log.d("MUESO_SYNC", "ViewModel playTrackAtIndex: track at index $index is search query, resolving first...")
+                Log.d("MUESO_SYNC", "ViewModel playTrackAtIndex: track at index $trackIndex is search query, resolving first...")
                 _resolvingTrackTitle.value = track.title
                 _isResolvingTrack.value = true
                 activeCurrentStreamJob?.cancel()
@@ -2482,20 +2692,40 @@ class PlayerViewModel(
                         _isResolvingTrack.value = false
                         _resolvingTrackTitle.value = null
                         val list = currentTracks.toMutableList()
-                        if (index in list.indices && list[index].id == track.id) {
-                            list[index] = resolved
+                        if (trackIndex in list.indices && list[trackIndex].id == track.id) {
+                            list[trackIndex] = resolved
                             currentTracks = list
-                            mediaPlayerController.updateTrackInQueue(index, resolved)
-                            mediaPlayerController.seekToIndex(index)
-                            warmNextTrack(index + 1)
+                            mediaPlayerController.updateTrackInQueue(trackIndex, resolved)
+                            mediaPlayerController.seekToIndex(trackIndex)
+                            warmNextTrack(trackIndex + 1)
                         }
                     }
                 }
             } else {
-                mediaPlayerController.seekToIndex(index)
-                warmNextTrack(index + 1)
+                mediaPlayerController.seekToIndex(trackIndex)
+                warmNextTrack(trackIndex + 1)
             }
         }
+    }
+
+    fun requestPlayTrackAtIndex(index: Int) {
+        val targetTrackId = currentTracks.getOrNull(index)?.id ?: return
+        if (canManuallyChangeTrack(targetTrackId)) playTrackAtIndex(index)
+    }
+
+    private fun findNextAllowedTrackIndex(startIndex: Int): Int? {
+        if (currentTracks.isEmpty()) return null
+        val firstPass = (startIndex.coerceAtLeast(0)..currentTracks.lastIndex).firstOrNull { candidate ->
+            currentTracks.getOrNull(candidate)?.let { !blacklistManager.isBlocked(it) } == true
+        }
+        if (firstPass != null) return firstPass
+        if (_repeatMode.value == Player.REPEAT_MODE_ALL) {
+            val wrapEnd = startIndex.coerceAtMost(currentTracks.size)
+            return (0 until wrapEnd).firstOrNull { candidate ->
+                currentTracks.getOrNull(candidate)?.let { !blacklistManager.isBlocked(it) } == true
+            }
+        }
+        return null
     }
 
     fun moveInQueue(fromIndex: Int, toIndex: Int) {
@@ -2523,7 +2753,7 @@ class PlayerViewModel(
         Log.d("MUESO_SYNC", "ViewModel removeFromQueue: trackId=$trackId, resolvedIndex=$index, track='${currentTracks[index].title}'")
 
         if (index == currentIdx) {
-            playNextTrack()
+            advanceToNextTrack()
         }
 
         val mutableList = currentTracks.toMutableList()
@@ -2569,10 +2799,38 @@ class PlayerViewModel(
         }
     }
 
-    fun seekTo(positionMs: Long) {
+    /** Seeks within the current song. Returns false if the seek was refused by [RewindGate]. */
+    fun seekTo(positionMs: Long): Boolean {
+        val currentPositionMs = mediaPlayerController.playbackState().value.currentPositionMs
+        val context = com.akshay.musicplayer.AppContainer.getContext()
+        fun refuse(message: String): Boolean {
+            SkipRefusalFeedback.playTone(context)
+            publishSkipRefusal()
+            android.widget.Toast.makeText(context, message, android.widget.Toast.LENGTH_SHORT).show()
+            return false
+        }
+        when (val decision = com.akshay.musicplayer.media.service.RewindGate.check(currentPositionMs, positionMs)) {
+            com.akshay.musicplayer.media.service.RewindGate.Decision.Refused ->
+                return refuse("No rewinds left for this song. Let it play forward.")
+            is com.akshay.musicplayer.media.service.RewindGate.Decision.ForwardWaiting -> {
+                val secs = (decision.remainingMs + 999L) / 1000L
+                return refuse("Fast-forward unlocks in ${secs}s. Try again then.")
+            }
+            com.akshay.musicplayer.media.service.RewindGate.Decision.ForwardRefused ->
+                return refuse("You've already fast-forwarded this song.")
+            com.akshay.musicplayer.media.service.RewindGate.Decision.AllowedUsedForward ->
+                android.widget.Toast.makeText(context, "That was your fast-forward for this song.", android.widget.Toast.LENGTH_SHORT).show()
+            is com.akshay.musicplayer.media.service.RewindGate.Decision.AllowedUsedRewind -> {
+                if (decision.remaining == 0) {
+                    android.widget.Toast.makeText(context, "That was your rewind for this song.", android.widget.Toast.LENGTH_SHORT).show()
+                }
+            }
+            com.akshay.musicplayer.media.service.RewindGate.Decision.Allowed -> Unit
+        }
         viewModelScope.launch {
             mediaPlayerController.seekTo(positionMs)
         }
+        return true
     }
 
     fun getCurrentTrack(): TrackEntity? {
@@ -2602,21 +2860,26 @@ class PlayerViewModel(
     // 1st click: Repeat Once (REPEAT_MODE_ONE)
     // 2nd click: Repeat All (REPEAT_MODE_ALL) for playlists; or OFF for infinite radio queue
     // 3rd click: OFF
+    // Repeat One is intentionally not offered: looping a single song is exactly what this app limits.
+    // Repeat All is only offered for playlists long enough that it isn't a disguised loop.
     fun cycleRepeatMode(context: android.content.Context? = null) {
         val isPlaylist = _isPlaylistContext.value && _playlistTrackCount.value > 0
         val newMode = when (_repeatMode.value) {
-            Player.REPEAT_MODE_OFF -> Player.REPEAT_MODE_ONE
-            Player.REPEAT_MODE_ONE -> {
-                if (isPlaylist) {
+            Player.REPEAT_MODE_OFF -> {
+                if (isPlaylist && _playlistTrackCount.value >= MIN_TRACKS_FOR_REPEAT_ALL) {
                     Player.REPEAT_MODE_ALL
                 } else {
                     context?.let {
-                        android.widget.Toast.makeText(it, "Repeat All is unavailable in radio queue", android.widget.Toast.LENGTH_SHORT).show()
+                        val message = if (isPlaylist) {
+                            "Repeat needs a playlist of at least $MIN_TRACKS_FOR_REPEAT_ALL songs"
+                        } else {
+                            "Repeat is unavailable in radio queue"
+                        }
+                        android.widget.Toast.makeText(it, message, android.widget.Toast.LENGTH_SHORT).show()
                     }
                     Player.REPEAT_MODE_OFF
                 }
             }
-            Player.REPEAT_MODE_ALL -> Player.REPEAT_MODE_OFF
             else -> Player.REPEAT_MODE_OFF
         }
         _repeatMode.value = newMode
@@ -2732,16 +2995,16 @@ class PlayerViewModel(
         mediaPlayerController.insertTracksToQueue(insertIndex, tracks)
     }
 
-    fun playShuffle(tracks: List<TrackEntity>) {
-        if (tracks.isEmpty()) return
+    fun playShuffle(tracks: List<TrackEntity>): Boolean {
+        if (tracks.isEmpty()) return false
         val shuffled = tracks.shuffled()
-        playQueue(shuffled, 0)
+        return playQueue(shuffled, 0)
     }
 
-    fun playOnlineShuffle(tracks: List<TrackEntity>, playlistInfo: SelectedOnlinePlaylist? = null) {
-        if (tracks.isEmpty()) return
+    fun playOnlineShuffle(tracks: List<TrackEntity>, playlistInfo: SelectedOnlinePlaylist? = null): Boolean {
+        if (tracks.isEmpty()) return false
         val shuffled = tracks.shuffled()
-        playOnlinePlaylist(shuffled, 0, playlistInfo)
+        return playOnlinePlaylist(shuffled, 0, playlistInfo)
     }
 
     fun startMix(tracks: List<TrackEntity>) {
@@ -2771,26 +3034,31 @@ class PlayerViewModel(
         addTracksToQueue(listOf(track))
     }
 
+    /**
+     * Ids of tracks the user added with "Add to queue" that haven't been reached yet. Used so a
+     * new queued track lands after earlier queued ones but before the rest of the playlist.
+     */
+    private val userQueuedTrackIds = mutableSetOf<Long>()
+
     fun addTracksToQueue(tracks: List<TrackEntity>) {
         if (tracks.isEmpty()) return
 
         val currentIdx = currentTrackIndexState.value.coerceAtLeast(0)
-        val isPlaylist = _isPlaylistContext.value && _playlistTrackCount.value > 0
+        currentTracks.getOrNull(currentIdx)?.let { userQueuedTrackIds.remove(it.id) }
 
-        val insertIndex = if (isPlaylist && currentIdx < _playlistTrackCount.value) {
-            // Playing a playlist -> insert right after the playlist tracks (before radio recommendations)
-            _playlistTrackCount.value.coerceAtMost(currentTracks.size)
-        } else {
-            // Playing a single track (or past the playlist) -> insert right after currently playing track
-            (currentIdx + 1).coerceAtMost(currentTracks.size)
+        // Insert right after the current track, behind any tracks the user already queued.
+        var insertIndex = (currentIdx + 1).coerceAtMost(currentTracks.size)
+        while (insertIndex < currentTracks.size && currentTracks[insertIndex].id in userQueuedTrackIds) {
+            insertIndex++
         }
 
         val updated = currentTracks.toMutableList()
         updated.addAll(insertIndex, tracks)
         currentTracks = updated
+        userQueuedTrackIds.addAll(tracks.map { it.id })
 
         if (_isPlaylistContext.value) {
-            _playlistTrackCount.value += tracks.size
+            if (insertIndex <= _playlistTrackCount.value) _playlistTrackCount.value += tracks.size
         } else {
             _playlistTrackCount.value = 1 + tracks.size
             _isPlaylistContext.value = true
@@ -2876,3 +3144,8 @@ class PlayerViewModel(
     fun getQueueTracks(): List<TrackEntity> = currentTracks
 
 }
+
+/** A playlist counts as "played" (for Recents ordering) after this much real playback. */
+private const val RECENT_PLAY_MIN_MS = 10_000L
+/** While a playlist keeps playing, its Recents stamp is refreshed this often. */
+private const val RECENT_PLAY_REFRESH_MS = 15 * 60_000L

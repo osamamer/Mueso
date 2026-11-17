@@ -9,7 +9,7 @@ import kotlinx.coroutines.flow.Flow
 @Dao
 interface OnlinePlaylistDao {
 
-    @Query("SELECT * FROM online_playlists ORDER BY dateCreated DESC")
+    @Query("SELECT * FROM online_playlists ORDER BY isPinned DESC, CASE WHEN isPinned = 1 THEN sortOrder ELSE 0 END ASC, MAX(lastPlayedAt, dateCreated) DESC")
     fun getAllOnlinePlaylists(): Flow<List<OnlinePlaylistEntity>>
 
     @Query("SELECT * FROM online_playlists WHERE id = :playlistId")
@@ -26,6 +26,9 @@ interface OnlinePlaylistDao {
 
     @Query("UPDATE online_playlists SET name = :newName, description = :newDescription WHERE id = :playlistId")
     fun updateOnlinePlaylistDetails(playlistId: Long, newName: String, newDescription: String): Int
+
+    @Query("UPDATE online_playlists SET description = :description WHERE id = :playlistId")
+    fun updateOnlinePlaylistDescription(playlistId: Long, description: String?): Int
 
     @Query("UPDATE online_playlists SET dateCreated = :timestamp WHERE id = :playlistId")
     fun updateOnlinePlaylistTimestamp(playlistId: Long, timestamp: Long = System.currentTimeMillis()): Int
@@ -45,7 +48,7 @@ interface OnlinePlaylistDao {
     @Query("DELETE FROM online_playlist_tracks WHERE onlinePlaylistId = :playlistId")
     fun clearOnlinePlaylistTracks(playlistId: Long): Int
 
-    @Query("SELECT * FROM online_playlists ORDER BY dateCreated DESC")
+    @Query("SELECT * FROM online_playlists ORDER BY isPinned DESC, CASE WHEN isPinned = 1 THEN sortOrder ELSE 0 END ASC, MAX(lastPlayedAt, dateCreated) DESC")
     fun getAllOnlinePlaylistsSync(): List<OnlinePlaylistEntity>
 
     @Query("UPDATE online_playlists SET artworkUrl = :artworkUrl WHERE id = :playlistId")
@@ -53,6 +56,18 @@ interface OnlinePlaylistDao {
 
     @Query("UPDATE online_playlists SET spotifyUrl = :spotifyUrl WHERE id = :playlistId")
     fun updateOnlinePlaylistSpotifyUrl(playlistId: Long, spotifyUrl: String?): Int
+
+    @Query("UPDATE online_playlists SET isPinned = :isPinned WHERE id = :playlistId")
+    fun setOnlinePlaylistPinned(playlistId: Long, isPinned: Boolean): Int
+
+    @Query("UPDATE online_playlists SET sortOrder = :sortOrder WHERE id = :playlistId")
+    fun setOnlinePlaylistSortOrder(playlistId: Long, sortOrder: Int): Int
+
+    @Query("UPDATE online_playlists SET lastPlayedAt = :timestamp WHERE id = :playlistId")
+    fun setOnlinePlaylistLastPlayed(playlistId: Long, timestamp: Long = System.currentTimeMillis()): Int
+
+    @Query("SELECT onlinePlaylistId AS playlistId, trackId FROM online_playlist_tracks")
+    fun getAllTrackPairs(): List<PlaylistTrackPair>
 
     @androidx.room.Update
     fun updateOnlinePlaylistTracks(tracks: List<OnlinePlaylistTrackEntity>)
