@@ -18,6 +18,9 @@ import com.akshay.musicplayer.data.repository.TrackRepositoryImpl
 import com.akshay.musicplayer.data.sources.LocalMediaStoreDataSource
 import com.akshay.musicplayer.domain.usecase.GetLocalTracksUseCase
 import com.akshay.musicplayer.media.player.ExoPlayerController
+import com.akshay.musicplayer.data.profiles.LightProfileSync
+import com.akshay.musicplayer.data.profiles.LightProfiles
+import com.akshay.musicplayer.ui.screens.LightProfileScreen
 import com.akshay.musicplayer.ui.screens.MainScreen
 import com.akshay.musicplayer.ui.screens.SplashScreen
 import com.akshay.musicplayer.ui.screens.WelcomeScreen
@@ -141,9 +144,11 @@ class MainActivity : ComponentActivity() {
                 cornerRadiusOption = cornerRadiusOption,
                 lyricsFontSizeOption = lyricsFontSizeOption
             ) {
-                var showSplash by remember { mutableStateOf(true) }
+                var showSplash by remember { mutableStateOf(!LightProfiles.isLight) }
 
-                if (showSplash) {
+                if (LightProfiles.isLight) {
+                    LightProfileContent()
+                } else if (showSplash) {
                     SplashScreen(
                         onAnimationFinished = {
                             showSplash = false
@@ -192,6 +197,31 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    @Composable
+    private fun LightProfileContent() {
+        var isSyncing by remember { mutableStateOf(true) }
+        var syncFailed by remember { mutableStateOf(false) }
+        val audioPermission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            android.Manifest.permission.READ_MEDIA_AUDIO
+        } else {
+            android.Manifest.permission.READ_EXTERNAL_STORAGE
+        }
+        val permissionLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+            androidx.activity.result.contract.ActivityResultContracts.RequestPermission()
+        ) { granted ->
+            if (granted) playerViewModel.loadLocalTracks(forceReload = true)
+        }
+        LaunchedEffect(Unit) {
+            val refreshed = kotlinx.coroutines.withContext(Dispatchers.IO) { LightProfileSync.pull(applicationContext) }
+            syncFailed = !refreshed
+            isSyncing = false
+            val granted = androidx.core.content.ContextCompat.checkSelfPermission(this@MainActivity, audioPermission) ==
+                android.content.pm.PackageManager.PERMISSION_GRANTED
+            if (granted) playerViewModel.loadLocalTracks(forceReload = true) else permissionLauncher.launch(audioPermission)
+        }
+        LightProfileScreen(viewModel = playerViewModel, isSyncing = isSyncing, syncFailed = syncFailed)
     }
 
     private fun setupViewModel() {

@@ -71,4 +71,10 @@ interface OnlinePlaylistDao {
 
     @androidx.room.Update
     fun updateOnlinePlaylistTracks(tracks: List<OnlinePlaylistTrackEntity>)
+
+    @Query("DELETE FROM online_playlists")
+    fun deleteAllOnlinePlaylists(): Int
+
+    @Query("DELETE FROM online_playlist_tracks")
+    fun deleteAllOnlinePlaylistTracks(): Int
 }

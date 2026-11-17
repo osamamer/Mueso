@@ -55,4 +55,13 @@ interface PlaylistDao {
 
     @Query("UPDATE playlists SET sortOrder = :sortOrder WHERE id = :playlistId")
     fun setPlaylistSortOrder(playlistId: Long, sortOrder: Int): Int
+
+    @Query("SELECT * FROM playlists WHERE id = :playlistId")
+    fun getPlaylistById(playlistId: Long): PlaylistEntity?
+
+    @Query("DELETE FROM playlists")
+    fun deleteAllPlaylists(): Int
+
+    @Query("DELETE FROM playlist_tracks")
+    fun deleteAllPlaylistTracks(): Int
 }

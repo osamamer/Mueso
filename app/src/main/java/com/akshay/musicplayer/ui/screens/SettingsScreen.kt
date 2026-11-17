@@ -511,6 +511,20 @@ fun SettingsScreen(
                     )
                 }
 
+                if (!com.akshay.musicplayer.data.profiles.LightProfiles.isLight &&
+                    com.akshay.musicplayer.data.profiles.LightProfiles.available.isNotEmpty()
+                ) {
+                    item {
+                        com.akshay.musicplayer.ui.components.LightProfilesSettingsSection(
+                            viewModel = viewModel,
+                            isDarkMode = isDarkMode,
+                            cardColor = cardBg,
+                            accentColor = accentColor,
+                            cornerRadius = cardCorner
+                        )
+                    }
+                }
+
                 // ═══════════════════════════════════════════════════════════
                 // 4. SMART SKIP (SPONSORBLOCK)
                 // ═══════════════════════════════════════════════════════════

@@ -700,6 +700,8 @@ class OnlineMusicRepository {
     // 3. RADIO / RECOMMENDATIONS (/next)
     // ==========================================
     suspend fun getRelatedRecommendations(track: TrackEntity): List<TrackEntity> = withContext(Dispatchers.IO) {
+        // A light profile may only ever play its chosen playlists, so it never gets radio fill-ins.
+        if (com.akshay.musicplayer.data.profiles.LightProfiles.isLight) return@withContext emptyList()
         var videoId = extractVideoId(track)
         Log.d("MUESO_RADIO", "getRelatedRecommendations called for title='${track.title}', videoId='$videoId'")
 

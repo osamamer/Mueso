@@ -19,6 +19,11 @@ fun getGitCommitSha(): String {
     }
 }
 
+// Light profiles: each name becomes a separate app ("Mueso Calm", ID com.akshay.musicplayer.profile.calm)
+// that only plays the playlists chosen for it in the full Mueso. Override with -PmuesoLightProfiles=calm,focus.
+val lightProfiles = (findProperty("muesoLightProfiles") as String? ?: "calm")
+    .split(",").map { it.trim() }.filter { it.matches(Regex("[a-z][a-z0-9]*")) }
+
 android {
     namespace = "com.akshay.musicplayer"
     compileSdk = 36
@@ -34,6 +39,7 @@ android {
         val buildTime = System.currentTimeMillis()
         buildConfigField("String", "GIT_COMMIT_SHA", "\"$gitSha\"")
         buildConfigField("Long", "BUILD_TIME_MILLIS", "${buildTime}L")
+        buildConfigField("String", "LIGHT_PROFILES", "\"${lightProfiles.joinToString(",")}\"")
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         ndk {
@@ -85,6 +91,29 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+        }
+    }
+
+    flavorDimensions += "profile"
+    productFlavors {
+        create("full") {
+            dimension = "profile"
+            isDefault = true
+            buildConfigField("String", "LIGHT_PROFILE", "\"\"")
+            manifestPlaceholders["appLabel"] = "@string/app_name"
+        }
+        lightProfiles.forEach { profile ->
+            create(profile) {
+                dimension = "profile"
+                applicationIdSuffix = ".profile.$profile"
+                buildConfigField("String", "LIGHT_PROFILE", "\"$profile\"")
+                manifestPlaceholders["appLabel"] = "Mueso ${profile.replaceFirstChar { it.uppercase() }}"
+            }
+        }
+    }
+    sourceSets {
+        lightProfiles.forEach { profile ->
+            getByName(profile).manifest.srcFile("src/light/AndroidManifest.xml")
         }
     }
 
