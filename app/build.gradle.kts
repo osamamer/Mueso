@@ -32,8 +32,9 @@ android {
         applicationId = "com.akshay.musicplayer"
         minSdk = 24
         targetSdk = 36
-        versionCode = 11
-        versionName = "v1.5.4"
+        // CI release builds pass VERSION_CODE/VERSION_NAME so every push installs as an update.
+        versionCode = System.getenv("VERSION_CODE")?.toIntOrNull() ?: 11
+        versionName = System.getenv("VERSION_NAME") ?: "v1.5.4"
 
         val gitSha = getGitCommitSha()
         val buildTime = System.currentTimeMillis()
