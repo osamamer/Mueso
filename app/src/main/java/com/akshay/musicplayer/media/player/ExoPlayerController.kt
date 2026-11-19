@@ -160,6 +160,7 @@ class ExoPlayerController(private val context: Context) : MediaPlayerController 
     private val listener = object : Player.Listener {
         override fun onPlaybackStateChanged(playbackState: Int) {
             if (isPlayingOnline) return
+            if (isOnLoadingPlaceholder()) return
             if (onlineResolutionJob?.isActive == true) {
                 Log.d("MUESO_SYNC", "Ignoring onPlaybackStateChanged($playbackState) while onlineResolutionJob is active")
                 return
@@ -214,6 +215,7 @@ class ExoPlayerController(private val context: Context) : MediaPlayerController 
                 return
             }
             if (onlineResolutionJob?.isActive == true) return
+            if (isOnLoadingPlaceholder()) return
 
             if (!isRestoring) {
                 updatePlaybackState()
@@ -223,6 +225,16 @@ class ExoPlayerController(private val context: Context) : MediaPlayerController 
 
         override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
             if (isPlayingOnline) return
+            if (isOnLoadingPlaceholder()) {
+                // Pause pressed on the notification/headset while a track is still loading:
+                // treat it as a real pause so the load doesn't start playing afterwards.
+                if (!playWhenReady && reason == Player.PLAY_WHEN_READY_CHANGE_REASON_USER_REQUEST &&
+                    mediaController?.playWhenReady == false
+                ) {
+                    pause()
+                }
+                return
+            }
             if (onlineResolutionJob?.isActive == true) return
 
             if (!isRestoring) {
@@ -243,6 +255,7 @@ class ExoPlayerController(private val context: Context) : MediaPlayerController 
         override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
             if (isPlayingOnline) return
             if (mediaItem == null) return
+            if (mediaItem.mediaId.startsWith(LOADING_MEDIA_ID_PREFIX)) return
 
             // A playlist modification (items added, removed, or replaced) must never trigger auto-advance or seekToIndex
             if (reason == Player.MEDIA_ITEM_TRANSITION_REASON_PLAYLIST_CHANGED) {
@@ -616,6 +629,72 @@ class ExoPlayerController(private val context: Context) : MediaPlayerController 
         } catch (e: Exception) {
             Log.d("MUESO_SYNC", "Could not startService: ${e.message}")
         }
+    }
+
+    /**
+     * While a stream is being resolved, the media session plays a looping silent item carrying the
+     * new track's metadata. That keeps the session in a "playing" state, so the system notification
+     * (and the foreground service) stays up instead of vanishing until the real stream starts.
+     * The item's media id is prefixed so listeners can tell it apart from real tracks; it is
+     * replaced as soon as the real media item is set.
+     */
+    private fun isOnLoadingPlaceholder(): Boolean =
+        mediaController?.currentMediaItem?.mediaId?.startsWith(LOADING_MEDIA_ID_PREFIX) == true
+
+    private fun showLoadingPlaceholder(track: TrackEntity) {
+        startServiceIfForeground()
+        // Leave web-player mode first, or the session's play() would be routed to the old YouTube video.
+        isPlayingOnline = false
+        isPlayingLosslessOnline = false
+        isPlayingDirectOnline = false
+        ytPlayerManager.pause()
+        com.akshay.musicplayer.media.service.MediaSessionBridge.isOnlinePlaying = false
+        val action: () -> Unit = {
+            mediaController?.let { controller ->
+                val silenceUri = Uri.parse("android.resource://${context.packageName}/${com.akshay.musicplayer.R.raw.silence}")
+                val metadata = MediaMetadata.Builder()
+                    .setTitle(track.title)
+                    .setArtist(track.artist)
+                    .setAlbumTitle(track.album)
+                    .setArtworkUri(getBestArtworkUri(track))
+                    .setIsPlayable(true)
+                    .setMediaType(MediaMetadata.MEDIA_TYPE_MUSIC)
+                    .build()
+                val item = MediaItem.Builder()
+                    .setMediaId("$LOADING_MEDIA_ID_PREFIX${track.id}")
+                    .setUri(silenceUri)
+                    .setMediaMetadata(metadata)
+                    .build()
+                controller.volume = 0f
+                // Loop the silence so a slow resolve never hits STATE_ENDED (which would auto-advance).
+                controller.repeatMode = Player.REPEAT_MODE_ONE
+                controller.setMediaItem(item, 0L)
+                controller.prepare()
+                controller.play()
+            }
+        }
+        if (mediaController != null) action()
+    }
+
+    override fun showLoading(track: TrackEntity) {
+        bufferingWatchdogJob?.cancel()
+        pendingTrackEndedRunnable?.let {
+            mainHandler.removeCallbacks(it)
+            pendingTrackEndedRunnable = null
+        }
+        com.akshay.musicplayer.media.service.MediaSessionBridge.isTransitioningOrBuffering = true
+        currentTrackId = track.id
+        lastPositionTrackId = track.id
+        lastValidPositionMs = 0L
+        _playbackState.value = PlaybackState(
+            isPlaying = true,
+            currentTrackId = track.id,
+            currentPositionMs = 0L,
+            durationMs = track.duration.coerceAtLeast(0L),
+            isBuffering = true
+        )
+        updateArtworkForCurrentTrack(track)
+        showLoadingPlaceholder(track)
     }
 
     private var fallbackJob: Job? = null
@@ -1430,6 +1509,7 @@ class ExoPlayerController(private val context: Context) : MediaPlayerController 
     private fun updatePlaybackState() {
         if (isPlayingOnline) return
         if (onlineResolutionJob?.isActive == true) return
+        if (isOnLoadingPlaceholder()) return
 
         val controller = mediaController
         if (controller != null) {
@@ -1494,9 +1574,11 @@ class ExoPlayerController(private val context: Context) : MediaPlayerController 
         tracksQueue = tracks
         currentQueueIndex = safeIndex
         notifyQueueOrCommandsChanged()
-        mediaController?.pause()
-        mediaController?.clearMediaItems()
         val track = tracks[safeIndex]
+        if (!isOnlineTrack(track)) {
+            mediaController?.pause()
+            mediaController?.clearMediaItems()
+        }
         currentTrackId = track.id
         lastPositionTrackId = track.id
         lastValidPositionMs = 0L
@@ -1508,6 +1590,7 @@ class ExoPlayerController(private val context: Context) : MediaPlayerController 
             val isNetDown = !com.akshay.musicplayer.data.remote.NetworkMonitor.isConnected()
             if (isNetDown) {
                 Log.w("MUESO_NET", "setPlaylistAndPlay: online track '${track.title}' requested while offline. Staging for network restoration.")
+                mediaController?.pause()
                 currentOnlineTrack = track
                 currentTrackId = track.id
                 handleOnlineTrackNetworkError(track, 0L)
@@ -1571,6 +1654,7 @@ class ExoPlayerController(private val context: Context) : MediaPlayerController 
                     }
                 }
             }
+            showLoadingPlaceholder(track)
             return
         }
 
@@ -1902,6 +1986,7 @@ class ExoPlayerController(private val context: Context) : MediaPlayerController 
             } else {
                 val currentTrack = tracksQueue.getOrNull(currentQueueIndex)
                 val isStaleOrEnded = controller.mediaItemCount == 0 ||
+                        isOnLoadingPlaceholder() ||
                         controller.playbackState == Player.STATE_ENDED ||
                         controller.playbackState == Player.STATE_IDLE ||
                         isBufferingStalled ||
@@ -2047,8 +2132,10 @@ class ExoPlayerController(private val context: Context) : MediaPlayerController 
         val track = tracksQueue.getOrNull(index)
         val isTargetOnline = track != null && isOnlineTrack(track)
 
-        // Immediately pause current audio output to prevent audio bleed when skipping to a new track
-        mediaController?.pause()
+        // Immediately pause current audio output to prevent audio bleed when skipping to a new track.
+        // Online targets swap straight to a silent loading item instead, so the session keeps "playing"
+        // and the notification doesn't disappear while the stream resolves.
+        if (!isTargetOnline) mediaController?.pause()
         ytPlayerManager.pause()
 
         // Keep CPU & Wi-Fi awake during track resolution and handover
@@ -2073,6 +2160,7 @@ class ExoPlayerController(private val context: Context) : MediaPlayerController 
             val isNetDown = !com.akshay.musicplayer.data.remote.NetworkMonitor.isConnected()
             if (isNetDown) {
                 Log.w("MUESO_NET", "seekToIndex: online track '${track.title}' requested while offline. Staging for network restoration.")
+                mediaController?.pause()
                 currentOnlineTrack = track
                 currentTrackId = track.id
                 com.akshay.musicplayer.media.service.MediaSessionBridge.isTransitioningOrBuffering = false
@@ -2127,6 +2215,7 @@ class ExoPlayerController(private val context: Context) : MediaPlayerController 
                     }
                 }
             }
+            showLoadingPlaceholder(track)
             return
         }
 
@@ -2264,12 +2353,16 @@ class ExoPlayerController(private val context: Context) : MediaPlayerController 
             val mutable = tracksQueue.toMutableList()
             mutable.addAll(index, tracks)
             tracksQueue = mutable
+            // Keep pointing at the track that is actually playing.
+            if (index <= currentQueueIndex) currentQueueIndex += tracks.size
         } else {
             tracksQueue = tracksQueue + tracks
         }
         notifyQueueOrCommandsChanged()
 
-        if (isOnlinePlaybackOrQueue() || tracks.any { isOnlineTrack(it) }) return
+        // Online playback keeps a single item in ExoPlayer and advances through tracksQueue itself.
+        if (isOnlinePlaybackOrQueue()) return
+        val silenceUri = Uri.parse("android.resource://${context.packageName}/${com.akshay.musicplayer.R.raw.silence}")
 
         val action: () -> Unit = {
             mediaController?.let { controller ->
@@ -2285,9 +2378,12 @@ class ExoPlayerController(private val context: Context) : MediaPlayerController 
                         .setMediaType(MediaMetadata.MEDIA_TYPE_MUSIC)
                         .build()
 
+                    // Online tracks sit in the local timeline as silence; reaching one hands off to
+                    // the online player (see onMediaItemTransition), same as setPlaylistAndPlay.
+                    val uri = if (isOnlineTrack(track)) silenceUri else Uri.parse(track.filePath)
                     MediaItem.Builder()
                         .setMediaId(track.id.toString())
-                        .setUri(Uri.parse(track.filePath))
+                        .setUri(uri)
                         .setMediaMetadata(metadata)
                         .build()
                 }
@@ -2375,6 +2471,8 @@ class ExoPlayerController(private val context: Context) : MediaPlayerController 
     override fun mediaEvents(): Flow<PlayerEvent> = _mediaEvents
 
     companion object {
+        private const val LOADING_MEDIA_ID_PREFIX = "mueso_loading:"
+
         @android.annotation.SuppressLint("StaticFieldLeak")
         @Volatile
         private var instance: ExoPlayerController? = null

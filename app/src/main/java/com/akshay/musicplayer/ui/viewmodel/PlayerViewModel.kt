@@ -2525,8 +2525,8 @@ class PlayerViewModel(
         lastRequestedTrackId = target?.id
         val isOnline = target != null && (target.filePath.startsWith("online:") || isStreamUrlExpired(target.filePath))
         if (isOnline) {
-            mediaPlayerController.pause()
-            _resolvingTrackTitle.value = target?.title
+            mediaPlayerController.showLoading(target)
+            _resolvingTrackTitle.value = target.title
             _isResolvingTrack.value = true
         }
         currentTracks = playableTracks
@@ -2575,7 +2575,7 @@ class PlayerViewModel(
         val isOnlineQueryPlaceholder = track.filePath.startsWith("online:") &&
                 (track.filePath.removePrefix("online:").contains(" ") || track.filePath.removePrefix("online:").length != 11)
         if (isOnlineQueryPlaceholder) {
-            mediaPlayerController.pause()
+            mediaPlayerController.showLoading(track)
             _resolvingTrackTitle.value = track.title
             _isResolvingTrack.value = true
         }
@@ -2677,6 +2677,7 @@ class PlayerViewModel(
                     (track.filePath.removePrefix("online:").contains(" ") || track.filePath.removePrefix("online:").length != 11)
             if (isUnresolvedOrExpired) {
                 Log.d("MUESO_SYNC", "ViewModel playTrackAtIndex: track at index $trackIndex is search query, resolving first...")
+                mediaPlayerController.showLoading(track)
                 _resolvingTrackTitle.value = track.title
                 _isResolvingTrack.value = true
                 activeCurrentStreamJob?.cancel()
@@ -2850,6 +2851,24 @@ class PlayerViewModel(
         return if (currentIndex >= 0) currentTracks.size - currentIndex - 1 else currentTracks.size
     }
 
+    /**
+     * Index of the playing (or about-to-play) track in [currentTracks], read fresh from the player
+     * state. [currentTrackIndexState] is only kept up to date while something collects it, so its
+     * cached value can be stale when the player screen isn't showing (e.g. queueing from a list).
+     */
+    private fun liveCurrentTrackIndex(): Int {
+        val ids = listOfNotNull(
+            lastRequestedTrackId,
+            _playbackState.value.currentTrackId,
+            mediaPlayerController.playbackState().value.currentTrackId
+        )
+        for (id in ids) {
+            val idx = currentTracks.indexOfFirst { it.id == id }
+            if (idx >= 0) return idx
+        }
+        return currentTrackIndexState.value.coerceIn(0, (currentTracks.size - 1).coerceAtLeast(0))
+    }
+
     fun getCurrentTrackIndex(): Int {
         val currentTrackId = _playbackState.value.currentTrackId ?: return 0
         return currentTracks.indexOfFirst { it.id == currentTrackId }.takeIf { it >= 0 } ?: 0
@@ -2979,7 +2998,7 @@ class PlayerViewModel(
 
     fun playNextTracks(tracks: List<TrackEntity>) {
         if (tracks.isEmpty()) return
-        val currentIdx = currentTrackIndexState.value.coerceAtLeast(0)
+        val currentIdx = liveCurrentTrackIndex()
         val insertIndex = (currentIdx + 1).coerceAtMost(currentTracks.size)
         val updated = currentTracks.toMutableList()
         updated.addAll(insertIndex, tracks)
@@ -3043,7 +3062,7 @@ class PlayerViewModel(
     fun addTracksToQueue(tracks: List<TrackEntity>) {
         if (tracks.isEmpty()) return
 
-        val currentIdx = currentTrackIndexState.value.coerceAtLeast(0)
+        val currentIdx = liveCurrentTrackIndex()
         currentTracks.getOrNull(currentIdx)?.let { userQueuedTrackIds.remove(it.id) }
 
         // Insert right after the current track, behind any tracks the user already queued.
@@ -3073,7 +3092,7 @@ class PlayerViewModel(
     }
 
     fun clearUpcomingQueue() {
-        val currentIdx = currentTrackIndexState.value.coerceAtLeast(0)
+        val currentIdx = liveCurrentTrackIndex()
         if (currentIdx < currentTracks.size - 1) {
             currentTracks = currentTracks.subList(0, currentIdx + 1)
             _playlistTrackCount.value = currentIdx + 1
@@ -3086,7 +3105,7 @@ class PlayerViewModel(
         mediaPlayerController.setShuffleEnabled(enabled)
 
         if (currentTracks.isEmpty()) return
-        val currentIdx = currentTrackIndexState.value.coerceAtLeast(0)
+        val currentIdx = liveCurrentTrackIndex()
         if (currentIdx >= currentTracks.size) return
 
         val pastTracks = currentTracks.subList(0, currentIdx + 1)

@@ -34,6 +34,11 @@ interface MediaPlayerController {
     fun appendTracksToQueue(tracks: List<TrackEntity>)
     fun insertTracksToQueue(index: Int, tracks: List<TrackEntity>)
     fun clearUpcomingQueue(fromIndex: Int)
+    /**
+     * Shows [track] as the current, playing item while its stream is still being looked up, so the
+     * system media notification stays visible during loading. Playback itself starts later.
+     */
+    fun showLoading(track: TrackEntity) { pause() }
     fun isWaitingForNetwork(): Boolean = false
     fun retryPendingNetworkTrack() {}
     fun getCurrentQueue(): List<TrackEntity> = emptyList()
