@@ -917,6 +917,7 @@ fun OnlinePlaylistDetailScreen(
                             onDownload = { onDownloadTrack?.invoke(track) ?: viewModel?.downloadOnlineTrack(context, track) },
                             onDownloadOptions = { onDownloadTrack?.invoke(track) ?: viewModel?.downloadOnlineTrack(context, track) },
                             onCancelDownload = { viewModel?.cancelDownload(track.id) },
+                            onChooseVersion = viewModel?.let { vm -> { vm.openVersionPicker(track) } },
                             dragModifier = if (canRearrange && onMoveTrack != null) {
                                 Modifier.pointerInput(track.id) {
                                     detectDragGesturesAfterLongPress(
@@ -1156,6 +1157,7 @@ private fun OnlineTrackListItem(
     onDownload: (() -> Unit)? = null,
     onDownloadOptions: (() -> Unit)? = null,
     onCancelDownload: (() -> Unit)? = null,
+    onChooseVersion: (() -> Unit)? = null,
     dragModifier: Modifier = Modifier
 ) {
     var showMenu by remember { mutableStateOf(false) }
@@ -1286,6 +1288,23 @@ private fun OnlineTrackListItem(
                         onClick()
                     }
                 )
+                if (onChooseVersion != null) {
+                    DropdownMenuItem(
+                        text = {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Icon(Icons.Default.LibraryMusic, contentDescription = null, tint = AccentOrange, modifier = Modifier.size(18.dp))
+                                Text("Choose version…", color = textColor)
+                            }
+                        },
+                        onClick = {
+                            showMenu = false
+                            onChooseVersion()
+                        }
+                    )
+                }
                 if (downloadState?.isDownloading != true && downloadState?.isDownloaded != true) {
                     DropdownMenuItem(
                         text = {

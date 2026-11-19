@@ -61,8 +61,13 @@ if [[ -z "${DEVICE_ID}" ]]; then
   echo "APKs are in ${APK_ROOT}" >&2
   exit 1
 fi
+# Send one file at a time: KDE Connect returns immediately, so give each transfer time to land
+# before starting the next one.
+FIRST=1
 for FLAVOR in $(flavors); do
   APK="$(pick_apk "${FLAVOR}" arm64-v8a)"
+  [[ -n "${FIRST}" ]] || sleep "${SEND_GAP_SECONDS:-15}"
+  FIRST=
   kdeconnect-cli -d "${DEVICE_ID}" --share "${APK}"
   echo "Sent $(basename "${APK}") to the phone via KDE Connect - tap the notification to install."
 done

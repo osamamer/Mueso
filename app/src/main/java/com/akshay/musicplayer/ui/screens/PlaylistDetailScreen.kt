@@ -10,6 +10,7 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.LibraryMusic
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.QueueMusic
 import androidx.compose.material.icons.filled.Delete
@@ -606,6 +607,7 @@ fun PlaylistDetailScreen(
                                 if (viewModel.playQueue(filteredTracks, index)) onNavigateToPlayer()
                             },
                             onRemove = { viewModel.removeTrackFromPlaylist(playlist.id, track.id) },
+                            onChooseVersion = { viewModel.openVersionPicker(track) },
                             dragModifier = if (searchQuery.isNotEmpty() || trackSort != PlaylistTrackSort.CUSTOM) Modifier else Modifier.pointerInput(track.id) {
                                 detectDragGesturesAfterLongPress(
                                     onDragStart = {
@@ -742,6 +744,7 @@ private fun PlaylistTrackItem(
     dragOffsetY: Float,
     onClick: () -> Unit,
     onRemove: () -> Unit,
+    onChooseVersion: () -> Unit,
     dragModifier: Modifier
 ) {
     var showMenu by remember { mutableStateOf(false) }
@@ -847,6 +850,26 @@ private fun PlaylistTrackItem(
                 containerColor = dropdownBg,
                 shadowElevation = 16.dp
             ) {
+                DropdownMenuItem(
+                    text = {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            Icon(
+                                Icons.Default.LibraryMusic, null,
+                                tint = textPrimary,
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Text("Choose version…", color = textPrimary)
+                        }
+                    },
+                    onClick = {
+                        showMenu = false
+                        onChooseVersion()
+                    },
+                    modifier = Modifier.padding(horizontal = 4.dp)
+                )
                 DropdownMenuItem(
                     text = {
                         Row(

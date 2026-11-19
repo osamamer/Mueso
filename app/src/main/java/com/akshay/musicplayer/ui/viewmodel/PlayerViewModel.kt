@@ -16,6 +16,7 @@ import com.akshay.musicplayer.ui.components.SleepTimerMode
 import com.akshay.musicplayer.ui.state.PlaybackState
 import com.akshay.musicplayer.ui.state.PlayerUiState
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.async
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -72,6 +73,9 @@ class PlayerViewModel(
 
     private val onlineRepository = OnlineMusicRepository()
     private val blacklistManager = BlacklistManager(sharedPreferences)
+    private val trackVersionStore = com.akshay.musicplayer.data.TrackVersionStore(sharedPreferences)
+    private val _versionPickerTrack = MutableStateFlow<TrackEntity?>(null)
+    val versionPickerTrack: StateFlow<TrackEntity?> = _versionPickerTrack.asStateFlow()
     val blacklistRules: StateFlow<List<BlacklistRule>> = blacklistManager.rules
     private val skipAttemptGate = SkipAttemptGate
     val skipCountdown: StateFlow<com.akshay.musicplayer.media.service.SkipCountdown?> = SkipAttemptGate.countdown
@@ -1119,7 +1123,8 @@ class PlayerViewModel(
         return true
     }
 
-    private suspend fun resolveTrack(track: TrackEntity): TrackEntity {
+    private suspend fun resolveTrack(original: TrackEntity): TrackEntity {
+        val track = withPreferredVersion(original)
         val isOnline = track.filePath.startsWith("online:") || track.filePath.contains("googlevideo") || track.filePath.contains("youtube")
         if (!isOnline) {
             return track
@@ -1200,6 +1205,118 @@ class PlayerViewModel(
 
 
 
+
+    // ==========================================
+    // CHOOSE VERSION
+    // ==========================================
+
+    private fun isOnlineTrack(track: TrackEntity): Boolean =
+        track.filePath.startsWith("online:") || track.filePath.contains("googlevideo") || track.filePath.contains("youtube")
+
+    /** Swaps an online track to the version the user remembered for that song, if any. */
+    private fun withPreferredVersion(track: TrackEntity): TrackEntity {
+        if (!isOnlineTrack(track)) return track
+        val preferred = trackVersionStore.preferredVideoId(track) ?: return track
+        if (track.filePath == "online:$preferred") return track
+        val artwork = track.artworkUrl?.takeIf { it.isNotBlank() && !it.contains("/vi/") }
+            ?: "https://i.ytimg.com/vi/$preferred/hq720.jpg"
+        onlineRepository.recordVideoId(track.id, preferred)
+        return track.copy(filePath = "online:$preferred", artworkUrl = artwork)
+    }
+
+    fun openVersionPicker(track: TrackEntity) {
+        _versionPickerTrack.value = track
+    }
+
+    fun closeVersionPicker() {
+        _versionPickerTrack.value = null
+    }
+
+    fun preferredVersionId(track: TrackEntity): String? = trackVersionStore.preferredVideoId(track)
+
+    fun forgetPreferredVersion(track: TrackEntity) = trackVersionStore.forget(track)
+
+    fun versionVideoId(candidate: TrackEntity): String = onlineRepository.extractVideoId(candidate)
+
+    fun currentVersionVideoId(track: TrackEntity): String? {
+        val live = currentTracks.firstOrNull { it.id == track.id } ?: track
+        return if (live.filePath.startsWith("online:")) {
+            live.filePath.removePrefix("online:").takeIf { it.length == 11 && !it.contains(" ") }
+        } else null
+    }
+
+    /** Song + video search results for this track (optionally a live/acoustic/... variant), deduped by video. */
+    suspend fun findTrackVersions(
+        track: TrackEntity,
+        variant: com.akshay.musicplayer.data.VersionVariant
+    ): List<TrackEntity> = withContext(Dispatchers.IO) {
+        val base = OnlineMusicRepository.cleanSearchQuery(track.title, track.artist)
+        val query = listOf(base, variant.searchSuffix).filter { it.isNotBlank() }.joinToString(" ")
+        val songs = async {
+            runCatching { onlineRepository.searchOnlineTracks(query, "Songs") }.getOrDefault(emptyList())
+        }
+        val videos = async {
+            runCatching { onlineRepository.searchOnlineTracks(query, "Videos") }.getOrDefault(emptyList())
+        }
+        val merged = OnlineMusicRepository.rankTracks(songs.await(), query) + videos.await()
+        val seen = HashSet<String>()
+        merged.filter { candidate ->
+            val vid = onlineRepository.extractVideoId(candidate)
+            vid.length == 11 && seen.add(vid)
+        }
+    }
+
+    suspend fun resolveVersionPreviewUrl(videoId: String): String? = withContext(Dispatchers.IO) {
+        runCatching {
+            onlineRepository.resolveStreamUrl(videoId, com.akshay.musicplayer.AppContainer.getContext())
+        }.getOrNull()?.takeIf { it.startsWith("http") }
+    }
+
+    private var resumeAfterVersionPreview = false
+
+    fun pauseForVersionPreview() {
+        if (_playbackState.value.isPlaying) {
+            resumeAfterVersionPreview = true
+            mediaPlayerController.pause()
+        }
+    }
+
+    fun endVersionPreview(resumeMain: Boolean) {
+        if (resumeMain && resumeAfterVersionPreview && !_playbackState.value.isPlaying) {
+            mediaPlayerController.togglePlayPause()
+        }
+        resumeAfterVersionPreview = false
+    }
+
+    /** Plays [track] using the chosen [candidate] video; optionally remembers it for this song. */
+    fun applyTrackVersion(track: TrackEntity, candidate: TrackEntity, remember: Boolean) {
+        val videoId = onlineRepository.extractVideoId(candidate)
+        if (videoId.isBlank()) return
+        if (remember) trackVersionStore.save(track, videoId)
+        resumeAfterVersionPreview = false
+
+        val artwork = track.artworkUrl?.takeIf { it.isNotBlank() && !it.contains("/vi/") }
+            ?: candidate.artworkUrl?.takeIf { it.isNotBlank() }
+            ?: "https://i.ytimg.com/vi/$videoId/hq720.jpg"
+        val swapped = track.copy(filePath = "online:$videoId", artworkUrl = artwork)
+        onlineRepository.recordVideoId(track.id, videoId)
+
+        val index = currentTracks.indexOfFirst { it.id == track.id }
+        if (index >= 0) {
+            val list = currentTracks.toMutableList()
+            list[index] = swapped
+            currentTracks = list
+            mediaPlayerController.updateTrackInQueue(index, swapped)
+            if (track.id == _playbackState.value.currentTrackId) {
+                lastRequestedTrackId = track.id
+                mediaPlayerController.seekToIndex(index)
+            } else {
+                requestPlayTrackAtIndex(index)
+            }
+        } else {
+            playTrack(swapped, usePreferredVersion = false)
+        }
+    }
 
     private var isLoaded = false
 
@@ -2473,7 +2590,7 @@ class PlayerViewModel(
     private var originalUnshuffledTracks: List<TrackEntity>? = null
 
     fun playQueue(tracks: List<TrackEntity>, startIndex: Int = 0, isPlaylist: Boolean = true): Boolean {
-        val playableTracks = tracks.filterNot { blacklistManager.isBlocked(it) }
+        val playableTracks = tracks.filterNot { blacklistManager.isBlocked(it) }.map { withPreferredVersion(it) }
         if (playableTracks.isEmpty()) {
             mediaPlayerController.pause()
             android.widget.Toast.makeText(
@@ -2548,7 +2665,8 @@ class PlayerViewModel(
         return true
     }
 
-    fun playTrack(track: TrackEntity) {
+    fun playTrack(requested: TrackEntity, usePreferredVersion: Boolean = true) {
+        val track = if (usePreferredVersion) withPreferredVersion(requested) else requested
         if (blacklistManager.isBlocked(track)) {
             android.widget.Toast.makeText(
                 com.akshay.musicplayer.AppContainer.getContext(),

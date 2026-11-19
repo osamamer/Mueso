@@ -258,6 +258,8 @@ fun MainScreen(viewModel: PlayerViewModel) {
         viewModel.initGoogleDriveAccount(context)
     }
 
+    com.akshay.musicplayer.ui.components.VersionPickerHost(viewModel = viewModel, isDarkMode = isDarkMode)
+
     Scaffold(
         containerColor = if (isDarkMode) BgDark else Color.White,
         contentWindowInsets = WindowInsets(0, 0, 0, 0)

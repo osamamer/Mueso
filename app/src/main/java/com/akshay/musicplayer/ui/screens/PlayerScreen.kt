@@ -488,6 +488,7 @@ fun PlayerPageContent(
                         onShowSignalPath = { showSignalPathDialog = true },
                         onShowEqualizer = { showEqualizerSheet = true },
                         onAddToPlaylist = { showAddToPlaylistSheet = true },
+                        onChooseVersion = { viewModel.openVersionPicker(track) },
                         onDismiss = { showTrackMenuSheet = false }
                     )
                 }

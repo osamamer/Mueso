@@ -18,6 +18,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.PlaylistAdd
 import androidx.compose.material.icons.filled.Album
+import androidx.compose.material.icons.filled.LibraryMusic
 import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Person
@@ -58,6 +59,7 @@ fun TrackMenuBottomSheet(
     onShowSignalPath: () -> Unit = {},
     onShowEqualizer: () -> Unit = {},
     onAddToPlaylist: () -> Unit = {},
+    onChooseVersion: (() -> Unit)? = null,
     onDismiss: () -> Unit
 ) {
     val context = LocalContext.current
@@ -188,6 +190,21 @@ fun TrackMenuBottomSheet(
                     onAddToPlaylist()
                 }
             )
+
+            if (onChooseVersion != null) {
+                TrackMenuItem(
+                    icon = Icons.Default.LibraryMusic,
+                    title = "Choose version…",
+                    subtitle = "Live, acoustic, remix, cover & more",
+                    tint = accent,
+                    textPrimary = textPrimary,
+                    textSecondary = textSecondary,
+                    onClick = {
+                        onDismiss()
+                        onChooseVersion()
+                    }
+                )
+            }
 
             TrackMenuItem(
                 icon = Icons.Default.GraphicEq,
