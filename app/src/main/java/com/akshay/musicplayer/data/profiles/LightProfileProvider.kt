@@ -8,6 +8,7 @@ import android.database.MatrixCursor
 import android.net.Uri
 import android.util.Log
 import com.akshay.musicplayer.data.db.AppDatabase
+import com.akshay.musicplayer.ui.theme.ThemePresets
 
 /**
  * Serves `content://com.akshay.musicplayer.lightprofiles/<profile>` to the light profile apps:
@@ -30,7 +31,8 @@ class LightProfileProvider : ContentProvider() {
             val prefs = context.getSharedPreferences("mueso_prefs", Context.MODE_PRIVATE)
             val playlists = LightProfileSelections(prefs).get(profile)
             val snapshot = LightProfileSnapshot.build(AppDatabase.getDatabase(context), playlists)
-            MatrixCursor(arrayOf(COLUMN)).apply { addRow(arrayOf(snapshot)) }
+            val accent = prefs.getString(ACCENT_COLUMN, ThemePresets.SunsetOrange.id)
+            MatrixCursor(arrayOf(COLUMN, ACCENT_COLUMN)).apply { addRow(arrayOf(snapshot, accent)) }
         } catch (e: Exception) {
             Log.e(TAG, "Failed to build light profile $profile", e)
             null
@@ -44,6 +46,7 @@ class LightProfileProvider : ContentProvider() {
 
     companion object {
         const val COLUMN = "snapshot"
+        const val ACCENT_COLUMN = "accent_color_id"
         private const val TAG = "LightProfileProvider"
     }
 }
@@ -52,19 +55,19 @@ class LightProfileProvider : ContentProvider() {
 object LightProfileSync {
     private const val TAG = "LightProfileSync"
 
-    /** True when the playlists were refreshed. Blocking; call off the main thread. */
-    fun pull(context: Context): Boolean {
-        val profile = LightProfiles.current ?: return false
-        return try {
-            val uri = Uri.parse("content://${LightProfiles.AUTHORITY}/$profile")
-            val snapshot = context.contentResolver.query(uri, null, null, null, null)?.use { cursor ->
-                if (cursor.moveToFirst()) cursor.getString(0) else null
-            } ?: return false
-            LightProfileSnapshot.apply(AppDatabase.getDatabase(context), snapshot)
-            true
-        } catch (e: Exception) {
-            Log.e(TAG, "Could not read light profile $profile from the full Nuclear app", e)
-            false
-        }
+    /** Returns the full app's accent after refreshing playlists. Blocking; call off the main thread. */
+    fun pull(context: Context): Result<String?> = runCatching {
+        val profile = checkNotNull(LightProfiles.current)
+        val uri = Uri.parse("content://${LightProfiles.AUTHORITY}/$profile")
+        val snapshot = context.contentResolver.query(uri, null, null, null, null)?.use { cursor ->
+            if (!cursor.moveToFirst()) return@use null
+            val accentIndex = cursor.getColumnIndex(LightProfileProvider.ACCENT_COLUMN)
+            val accent = if (accentIndex >= 0) cursor.getString(accentIndex) else null
+            cursor.getString(0) to accent
+        } ?: error("No snapshot for light profile $profile")
+        LightProfileSnapshot.apply(AppDatabase.getDatabase(context), snapshot.first)
+        snapshot.second
+    }.onFailure { error ->
+        Log.e(TAG, "Could not refresh light profile from the full Nuclear app", error)
     }
 }

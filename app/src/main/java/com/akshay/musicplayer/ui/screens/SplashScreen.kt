@@ -2,7 +2,6 @@ package com.akshay.musicplayer.ui.screens
 
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
@@ -14,13 +13,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.*
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.akshay.musicplayer.R
 import kotlinx.coroutines.delay
 import kotlin.time.Duration.Companion.milliseconds
+import com.akshay.musicplayer.ui.components.NuclearLogo
 
 @Composable
 fun SplashScreen(onAnimationFinished: () -> Unit) {
@@ -134,9 +132,7 @@ fun SplashScreen(onAnimationFinished: () -> Unit) {
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.Center
         ) {
-            Image(
-                painter = painterResource(id = R.drawable.ic_logo),
-                contentDescription = "Nuclear logo",
+            NuclearLogo(
                 modifier = Modifier
                     .size(96.dp)
                     .graphicsLayer(

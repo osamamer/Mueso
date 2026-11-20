@@ -7,7 +7,6 @@ import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -26,7 +25,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
@@ -36,13 +34,13 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
-import com.akshay.musicplayer.R
 import com.akshay.musicplayer.data.backup.GoogleDriveBackupRepository
 import com.akshay.musicplayer.ui.theme.LocalAccentColor
 import com.akshay.musicplayer.ui.theme.LocalIsPureBlack
 import com.akshay.musicplayer.ui.viewmodel.PlayerViewModel
 import com.akshay.musicplayer.util.BatteryOptimizationHelper
 import com.akshay.musicplayer.util.PermissionHelper
+import com.akshay.musicplayer.ui.components.NuclearLogo
 
 @Composable
 fun WelcomeScreen(
@@ -160,9 +158,7 @@ fun WelcomeScreen(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Image(
-                        painter = painterResource(id = R.drawable.ic_logo),
-                        contentDescription = "Nuclear logo",
+                    NuclearLogo(
                         modifier = Modifier.size(54.dp)
                     )
 

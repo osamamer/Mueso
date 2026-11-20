@@ -6,7 +6,6 @@ import android.content.Context
 import android.os.Build
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -29,17 +28,16 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.akshay.musicplayer.BuildConfig
-import com.akshay.musicplayer.R
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import com.akshay.musicplayer.ui.components.NuclearLogo
 
 private val AccentOrange: Color
     @Composable
@@ -116,9 +114,7 @@ fun AboutScreen(
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     // Official App Logo
-                    Image(
-                        painter = painterResource(id = R.drawable.ic_logo),
-                        contentDescription = "Nuclear logo",
+                    NuclearLogo(
                         modifier = Modifier
                             .size(80.dp)
                             .clip(RoundedCornerShape(20.dp))

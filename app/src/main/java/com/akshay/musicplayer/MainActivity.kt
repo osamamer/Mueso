@@ -34,7 +34,9 @@ import com.akshay.musicplayer.ui.screens.LightProfileScreen
 import com.akshay.musicplayer.ui.screens.MainScreen
 import com.akshay.musicplayer.ui.screens.SplashScreen
 import com.akshay.musicplayer.ui.screens.WelcomeScreen
+import com.akshay.musicplayer.ui.theme.LocalAccentColor
 import com.akshay.musicplayer.ui.theme.MusicPlayerTheme
+import com.akshay.musicplayer.ui.theme.updateLauncherIcon
 import com.akshay.musicplayer.ui.viewmodel.PlayerViewModel
 import com.akshay.musicplayer.util.PermissionHelper
 import kotlinx.coroutines.Dispatchers
@@ -154,6 +156,9 @@ class MainActivity : ComponentActivity() {
                 cornerRadiusOption = cornerRadiusOption,
                 lyricsFontSizeOption = lyricsFontSizeOption
             ) {
+                val accent = LocalAccentColor.current
+                LaunchedEffect(accent) { updateLauncherIcon(applicationContext, accent) }
+
                 Box(
                     Modifier
                         .fillMaxSize()
@@ -231,8 +236,9 @@ class MainActivity : ComponentActivity() {
             if (granted) playerViewModel.loadLocalTracks(forceReload = true)
         }
         LaunchedEffect(Unit) {
-            val refreshed = kotlinx.coroutines.withContext(Dispatchers.IO) { LightProfileSync.pull(applicationContext) }
-            syncFailed = !refreshed
+            val refresh = kotlinx.coroutines.withContext(Dispatchers.IO) { LightProfileSync.pull(applicationContext) }
+            refresh.getOrNull()?.let(playerViewModel::setAccentColorId)
+            syncFailed = refresh.isFailure
             isSyncing = false
             val granted = androidx.core.content.ContextCompat.checkSelfPermission(this@MainActivity, audioPermission) ==
                 android.content.pm.PackageManager.PERMISSION_GRANTED

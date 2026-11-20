@@ -64,6 +64,7 @@ object ThemePresets {
     val ElectricViolet = AccentPalette("electric_violet", "Electric Violet", Color(0xFF8A2387), Color(0xFFE94057))
     val NeonCyan = AccentPalette("neon_cyan", "Neon Cyan", Color(0xFF00C9FF), Color(0xFF92FE9D))
     val CrimsonRed = AccentPalette("crimson_red", "Crimson Red", Color(0xFFFF416C), Color(0xFFFF4B2B))
+    val NuclearBlue = AccentPalette("nuclear_blue", "Nuclear Blue", Color(0xFF4F86FF), Color(0xFF9B7BFF))
     val OceanBlue = AccentPalette("ocean_blue", "Ocean Blue", Color(0xFF2193B0), Color(0xFF6DD5ED))
     val AmberGold = AccentPalette("amber_gold", "Amber Gold", Color(0xFFF7971E), Color(0xFFFFD200))
     val RosePink = AccentPalette("rose_pink", "Rose Pink", Color(0xFFFF758C), Color(0xFFFF7EB3))
@@ -75,6 +76,7 @@ object ThemePresets {
         ElectricViolet,
         NeonCyan,
         CrimsonRed,
+        NuclearBlue,
         OceanBlue,
         AmberGold,
         RosePink,
