@@ -121,7 +121,7 @@ fun SpotifyImportScreen(
                         fontSize = 13.sp
                     )
 
-                    // Option 1: Mueso Online Playlist
+                    // Option 1: Nuclear Online Playlist
                     Surface(
                         onClick = {
                             showDestinationDialog = false
@@ -147,7 +147,7 @@ fun SpotifyImportScreen(
                             }
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(
-                                    text = "Mueso Online Playlist",
+                                    text = "Nuclear Online Playlist",
                                     color = textPrimary,
                                     fontSize = 14.sp,
                                     fontWeight = FontWeight.SemiBold
@@ -332,7 +332,7 @@ fun SpotifyImportScreen(
                             }
                         }
                         Text(
-                            "Comparing your Spotify playlist with Mueso. Matching newly added tracks below:",
+                            "Comparing your Spotify playlist with Nuclear. Matching newly added tracks below:",
                             color = textSub,
                             fontSize = 12.sp
                         )
@@ -450,7 +450,7 @@ fun SpotifyImportScreen(
                         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             Text("Have a Spotify playlist export?", color = textPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
                             Text(
-                                "Choose a JSON file to import all its playlists. Mueso will find matching songs in its online catalog.",
+                                "Choose a JSON file to import all its playlists. Nuclear will find matching songs in its online catalog.",
                                 color = textSub,
                                 fontSize = 12.sp
                             )
@@ -499,7 +499,7 @@ fun SpotifyImportScreen(
                         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             Text("Get covers by signing in to Spotify", color = textPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
                             Text(
-                                "Sign in once and Mueso gives each imported playlist the cover of your Spotify playlist with the same name, private ones included. Songs aren't changed.",
+                                "Sign in once and Nuclear gives each imported playlist the cover of your Spotify playlist with the same name, private ones included. Songs aren't changed.",
                                 color = textSub,
                                 fontSize = 12.sp
                             )
@@ -640,7 +640,7 @@ fun SpotifyImportScreen(
                             color = textSub,
                             fontSize = 12.sp
                         )
-                        Text("Large exports can take a while. Mueso saves each playlist when matching finishes.", color = textSub, fontSize = 11.sp)
+                        Text("Large exports can take a while. Nuclear saves each playlist when matching finishes.", color = textSub, fontSize = 11.sp)
                     }
                 }
             }
@@ -868,7 +868,7 @@ fun SpotifyImportScreen(
                     ) {
                         Icon(Icons.Default.CheckCircle, contentDescription = null, tint = successTint, modifier = Modifier.size(48.dp))
                         Text(
-                            if (isSyncMode) "Sync Complete!" else if (isYt) "Created in YouTube Music!" else "Playlist Created in Mueso!",
+                            if (isSyncMode) "Sync Complete!" else if (isYt) "Created in YouTube Music!" else "Playlist Created in Nuclear!",
                             color = textPrimary,
                             fontSize = 18.sp,
                             fontWeight = FontWeight.Bold
@@ -876,7 +876,7 @@ fun SpotifyImportScreen(
                         Text(
                             if (isSyncMode) "Successfully added newly matched tracks to \"${syncTargetPlaylistName ?: "playlist"}\"."
                             else if (isYt) "\"${playlistData?.name}\" has been synced directly to your YouTube Music account."
-                            else "\"${playlistData?.name}\" has been saved to your Mueso Online Playlists.",
+                            else "\"${playlistData?.name}\" has been saved to your Nuclear Online Playlists.",
                             color = textSub,
                             fontSize = 13.sp,
                             textAlign = androidx.compose.ui.text.style.TextAlign.Center,

@@ -1,6 +1,6 @@
 <div align="center">
-  <img src="logo.svg" width="128" height="128" alt="Mueso Logo" />
-  <h1>Mueso</h1>
+  <img src="app/src/main/res/drawable-xxxhdpi/ic_logo.png" width="128" height="128" alt="Nuclear Logo" />
+  <h1>Nuclear for Android</h1>
   <p><strong>A Modern, Open-Source Android Music Player</strong></p>
 
   <p>
@@ -18,7 +18,7 @@
 
 <br />
 
-**Mueso** is a next-generation, high-performance, 100% native Android music player built with **Kotlin**, **Jetpack Compose**, **Material 3**, and **AndroidX Media3 ExoPlayer**. It requires **zero external backend servers or Python microservices**—running entirely client-side on-device. It seamlessly bridges local offline audio libraries with online streaming, native YouTube Music personalization, rich artist pages, mood & genre exploration, real-time LRCLIB synced lyrics, smart SponsorBlock segment filtering, native ID3/MP4 metadata tagging, offline downloads, and network-loss auto-resumption.
+**Nuclear for Android** is a fork of Mueso. It is a next-generation, high-performance, 100% native Android music player built with **Kotlin**, **Jetpack Compose**, **Material 3**, and **AndroidX Media3 ExoPlayer**. It requires **zero external backend servers or Python microservices**—running entirely client-side on-device. It seamlessly bridges local offline audio libraries with online streaming, native YouTube Music personalization, rich artist pages, mood & genre exploration, real-time LRCLIB synced lyrics, smart SponsorBlock segment filtering, native ID3/MP4 metadata tagging, offline downloads, and network-loss auto-resumption.
 
 > [!WARNING]
 > **DO NOT USE THIS PLAYER AS YOUR DAILY DRIVER!**
@@ -35,9 +35,9 @@
 
 ## Android head units
 
-For a head unit that installs Android apps directly, use the full universal Mueso APK. Open Mueso on the head unit and tap a track or the mini player to open Now Playing. The wide layout activates automatically. The Offline shortcut opens saved playlists and audio in the configured download folder (by default, Music/Mueso).
+For a head unit that installs Android apps directly, use the full universal Nuclear APK. Open Nuclear on the head unit and tap a track or the mini player to open Now Playing. The wide layout activates automatically. The Offline shortcut opens saved playlists and audio in the configured download folder (by default, Music/Mueso).
 
-Phone projection through Android Auto uses a separate host interface. This APK provides Mueso's own interface for direct installation.
+Phone projection through Android Auto uses a separate host interface. This APK provides Nuclear for Android's interface for direct installation.
 
 ---
 
@@ -122,7 +122,7 @@ We publish automated signed builds via GitHub Actions with architecture-specific
 
 ## 🛠️ Architecture & Tech Stack
 
-Mueso is built as a **100% Native Kotlin** Android application adhering strictly to **MVVM Clean Architecture** principles:
+Nuclear for Android is built as a **100% Native Kotlin** Android application adhering strictly to **MVVM Clean Architecture** principles:
 
 | Component | Technology |
 | :--- | :--- |
@@ -167,8 +167,9 @@ cd Mueso
 
 ## 🙏 Credits & Inspirations
 
-Mueso is built on top of amazing open-source technologies, community APIs, and great product inspirations:
+Nuclear for Android is built on top of amazing open-source technologies, community APIs, and great product inspirations:
 
+- **[Nuclear desktop fork](https://github.com/osamamer/nuclear)** - Green launcher artwork from the desktop player.
 - **[Resso](https://en.wikipedia.org/wiki/Resso) (by ByteDance)** - Inspiration for Mueso’s original playback interface.
 - **[Zuno](https://github.com/noFAYZ/zuno)** - Open-source desktop YouTube Music client by [@noFAYZ](https://github.com/noFAYZ); foundational inspiration and reference for multi-client stream resolving strategies (iOS, Android, TV, Web Remix) and player options.
 - **[SponsorBlock API](https://sponsor.ajay.app/)** - Crowd-sourced database for skipping non-music segments and sponsorships.

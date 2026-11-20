@@ -64,5 +64,5 @@ jobs:
           ls -lh out
           gh release create "$VERSION_NAME" out/*.apk \
             --target "$GITHUB_SHA" \
-            --title "Mueso $VERSION_NAME" \
-            --notes "Automated build of \`${GITHUB_SHA::7}\`. Use the \`full\` APKs for Mueso and the \`calm\` APKs for Mueso Calm; \`arm64-v8a\` fits almost every modern device."
+            --title "Nuclear $VERSION_NAME" \
+            --notes "Automated build of \`${GITHUB_SHA::7}\`. Use the \`full\` APKs for Nuclear and the \`calm\` APKs for Nuclear Calm; \`arm64-v8a\` fits almost every modern device."

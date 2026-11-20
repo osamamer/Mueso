@@ -4,9 +4,9 @@ import android.content.SharedPreferences
 import com.akshay.musicplayer.BuildConfig
 
 /**
- * Light profiles are separate installs of Mueso (one product flavor each, with its own
+ * Light profiles are separate installs of Nuclear (one product flavor each, with its own
  * application ID) that only show the playlists chosen for them in the full app. Being separate
- * packages, app blockers such as Claritard limit them independently of the full Mueso.
+ * packages, app blockers such as Claritard limit them independently of the full Nuclear app.
  */
 object LightProfiles {
     const val MAIN_PACKAGE = "com.akshay.musicplayer"
@@ -20,7 +20,7 @@ object LightProfiles {
     /** Every light profile this project builds, so the full app can offer them in Settings. */
     val available: List<String> = BuildConfig.LIGHT_PROFILES.split(",").map { it.trim() }.filter { it.isNotEmpty() }
 
-    fun displayName(profile: String): String = "Mueso ${profile.replaceFirstChar { it.uppercase() }}"
+    fun displayName(profile: String): String = "Nuclear ${profile.replaceFirstChar { it.uppercase() }}"
 }
 
 /** A playlist chosen for a light profile, either a local (device) or a saved online playlist. */

@@ -162,12 +162,12 @@ fun WelcomeScreen(
                 ) {
                     Image(
                         painter = painterResource(id = R.drawable.ic_logo),
-                        contentDescription = "Music Logo",
+                        contentDescription = "Nuclear logo",
                         modifier = Modifier.size(54.dp)
                     )
 
                     Text(
-                        text = "Welcome to Mueso",
+                        text = "Welcome to Nuclear",
                         color = textPrimary,
                         fontSize = 21.sp,
                         fontWeight = FontWeight.ExtraBold,
@@ -286,7 +286,7 @@ fun WelcomeScreen(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                // Noticeable skip button above Continue to Mueso
+                // Noticeable skip button above Continue to Nuclear
                 Text(
                     text = "Skip setup",
                     color = accentColor,
@@ -314,7 +314,7 @@ fun WelcomeScreen(
                         .height(46.dp)
                 ) {
                     Text(
-                        text = if (allPermissionsGranted) "Continue to Mueso" else "Grant All Permissions to Continue",
+                        text = if (allPermissionsGranted) "Continue to Nuclear" else "Grant All Permissions to Continue",
                         color = if (allPermissionsGranted) Color.White else textSub.copy(alpha = 0.55f),
                         fontSize = 14.sp,
                         fontWeight = FontWeight.Bold

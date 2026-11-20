@@ -1034,9 +1034,9 @@ fun SettingsScreen(
 
                         HorizontalDivider(color = dividerColor)
 
-                        // About Mueso Row
+                        // About Nuclear Row
                         SettingsClickableItem(
-                            title = "About Mueso",
+                            title = "About Nuclear",
                             subtitle = "Features, credits, architecture & specs",
                             icon = Icons.Default.Info,
                             isDarkMode = isDarkMode,
@@ -1347,7 +1347,7 @@ fun SettingsScreen(
                         }
 
                         Text(
-                            text = "Mueso Player $appVersionName • Open Source MIT",
+                            text = "Nuclear $appVersionName • Open Source MIT",
                             color = textSub.copy(alpha = 0.6f),
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Medium

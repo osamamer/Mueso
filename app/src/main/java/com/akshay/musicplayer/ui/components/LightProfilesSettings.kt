@@ -79,7 +79,7 @@ fun LightProfilesSettingsSection(
         ) {
             Text(
                 "Each light profile is its own app that plays only the playlists you tick here. " +
-                    "App blockers like Claritard treat it as a separate app, so you can block Mueso and keep it.",
+                    "App blockers like Claritard treat it as a separate app, so you can block Nuclear and keep it.",
                 color = textSub,
                 fontSize = 12.sp,
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)

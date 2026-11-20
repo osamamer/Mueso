@@ -200,10 +200,10 @@ class UpdateManager(private val coroutineScope: CoroutineScope) {
                     _updateInfo.value = info
                     val downloaded = getDownloadedApkFile(context, info) != null
                     _isUpdateDownloaded.value = downloaded
-                    _statusMessage.value = "Mueso is up to date ($currentVersionName)"
+                    _statusMessage.value = "Nuclear is up to date ($currentVersionName)"
                     if (showToastIfLatest) {
                         withContext(Dispatchers.Main) {
-                            Toast.makeText(context, "Mueso is up to date ($currentVersionName)", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(context, "Nuclear is up to date ($currentVersionName)", Toast.LENGTH_SHORT).show()
                         }
                     }
                 }
@@ -351,7 +351,7 @@ class UpdateManager(private val coroutineScope: CoroutineScope) {
             if (!context.packageManager.canRequestPackageInstalls()) {
                 pendingApkFile = apkFile
                 Log.w(TAG, "Install unknown apps permission not granted. Requesting from user...")
-                Toast.makeText(context, "Please allow Mueso to install unknown apps. Installation will continue automatically when you return.", Toast.LENGTH_LONG).show()
+                Toast.makeText(context, "Please allow Nuclear to install unknown apps. Installation will continue automatically when you return.", Toast.LENGTH_LONG).show()
                 val settingsIntent = Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES).apply {
                     data = Uri.parse("package:${context.packageName}")
                     flags = Intent.FLAG_ACTIVITY_NEW_TASK

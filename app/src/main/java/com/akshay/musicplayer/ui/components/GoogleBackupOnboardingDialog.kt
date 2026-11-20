@@ -76,7 +76,7 @@ fun GoogleBackupOnboardingDialog(
         },
         text = {
             Text(
-                text = "Connect your Google account to safely store your custom playlists in your personal Google Drive. You can restore them anytime if you reinstall Mueso or switch devices.",
+                text = "Connect your Google account to safely store your custom playlists in your personal Google Drive. You can restore them anytime if you reinstall Nuclear or switch devices.",
                 color = textSub,
                 fontSize = 13.sp,
                 lineHeight = 18.sp,

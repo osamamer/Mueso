@@ -395,7 +395,7 @@ private fun AllSongsTab(
                                     fontWeight = FontWeight.Bold
                                 )
                                 Text(
-                                    text = "Mueso needs audio access to find songs saved in your selected Mueso download folder.",
+                                    text = "Nuclear needs audio access to find songs saved in your selected Nuclear download folder.",
                                     color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f),
                                     fontSize = 13.sp,
                                     textAlign = androidx.compose.ui.text.style.TextAlign.Center
@@ -439,7 +439,7 @@ private fun AllSongsTab(
                                     fontWeight = FontWeight.Bold
                                 )
                                 Text(
-                                    text = "Songs downloaded with Mueso to your selected folder will appear here.",
+                                    text = "Songs downloaded with Nuclear to your selected folder will appear here.",
                                     color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f),
                                     fontSize = 13.sp,
                                     textAlign = androidx.compose.ui.text.style.TextAlign.Center
@@ -452,7 +452,7 @@ private fun AllSongsTab(
                                 ) {
                                     Icon(Icons.Default.Refresh, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
                                     Spacer(modifier = Modifier.width(8.dp))
-                                    Text("Refresh Mueso Downloads", color = Color.White, fontWeight = FontWeight.Bold)
+                                    Text("Refresh Nuclear Downloads", color = Color.White, fontWeight = FontWeight.Bold)
                                 }
                             }
                         }
@@ -516,7 +516,7 @@ private fun AllSongsTab(
                         fontWeight = FontWeight.Bold
                     )
                     Text(
-                        text = "Songs downloaded with Mueso to your selected folder will appear here.\nTap below to refresh.",
+                        text = "Songs downloaded with Nuclear to your selected folder will appear here.\nTap below to refresh.",
                         color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f),
                         fontSize = 13.sp,
                         textAlign = androidx.compose.ui.text.style.TextAlign.Center
@@ -529,7 +529,7 @@ private fun AllSongsTab(
                     ) {
                         Icon(Icons.Default.Refresh, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text("Refresh Mueso Downloads", color = Color.White, fontWeight = FontWeight.Bold)
+                        Text("Refresh Nuclear Downloads", color = Color.White, fontWeight = FontWeight.Bold)
                     }
                 }
             }
@@ -1058,7 +1058,7 @@ internal fun PlaylistsTab(
                     if (sortedOnlinePlaylists.isNotEmpty()) {
                         item(key = "mueso_playlist_header") {
                             Text(
-                                "Mueso Playlists",
+                                "Nuclear Playlists",
                                 color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.65f),
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.SemiBold,
@@ -1283,7 +1283,7 @@ private fun OnlinePlaylistItem(
         Column(modifier = Modifier.weight(1f)) {
             Text(playlist.name, color = textPrimary, fontSize = 15.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(
-                text = "${if (playlist.isPinned) "Pinned · " else ""}${tracks.size} tracks${if (!playlist.spotifyUrl.isNullOrBlank()) " · Spotify" else " · Mueso"}",
+                text = "${if (playlist.isPinned) "Pinned · " else ""}${tracks.size} tracks${if (!playlist.spotifyUrl.isNullOrBlank()) " · Spotify" else " · Nuclear"}",
                 color = textSecondary,
                 fontSize = 12.sp
             )

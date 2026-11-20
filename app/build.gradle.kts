@@ -19,8 +19,8 @@ fun getGitCommitSha(): String {
     }
 }
 
-// Light profiles: each name becomes a separate app ("Mueso Calm", ID com.akshay.musicplayer.profile.calm)
-// that only plays the playlists chosen for it in the full Mueso. Override with -PmuesoLightProfiles=calm,focus.
+// Light profiles: each name becomes a separate app ("Nuclear Calm", ID com.akshay.musicplayer.profile.calm)
+// that only plays the playlists chosen for it in the full Nuclear app. Override with -PmuesoLightProfiles=calm,focus.
 val lightProfiles = (findProperty("muesoLightProfiles") as String? ?: "calm")
     .split(",").map { it.trim() }.filter { it.matches(Regex("[a-z][a-z0-9]*")) }
 
@@ -108,7 +108,7 @@ android {
                 dimension = "profile"
                 applicationIdSuffix = ".profile.$profile"
                 buildConfigField("String", "LIGHT_PROFILE", "\"$profile\"")
-                manifestPlaceholders["appLabel"] = "Mueso ${profile.replaceFirstChar { it.uppercase() }}"
+                manifestPlaceholders["appLabel"] = "Nuclear ${profile.replaceFirstChar { it.uppercase() }}"
             }
         }
     }

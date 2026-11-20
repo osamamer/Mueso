@@ -254,7 +254,7 @@ class DownloadManager(
                 }
                 val lrcContent = if (shouldEmbedLyrics) activeLyrics?.toLrcString()?.ifBlank { null } else null
 
-                val albumName = if (track.album.isNotBlank() && track.album != "Unknown Album") track.album else "Mueso Downloads"
+                val albumName = if (track.album.isNotBlank() && track.album != "Unknown Album") track.album else "Nuclear Downloads"
                 val embedSuccess = onlineRepository.embedMetadata(
                     filePath = fileToSave.absolutePath,
                     title = track.title,

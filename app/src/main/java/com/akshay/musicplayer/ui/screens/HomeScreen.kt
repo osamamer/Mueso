@@ -83,7 +83,7 @@ private sealed interface HomePlaylist {
     }
 }
 
-private enum class HomeFilter(val label: String) { ALL("All"), MUESO("Mueso"), LOCAL("Local") }
+private enum class HomeFilter(val label: String) { ALL("All"), MUESO("Nuclear"), LOCAL("Local") }
 
 private fun greetingForNow(): String = when (Calendar.getInstance().get(Calendar.HOUR_OF_DAY)) {
     in 5..11 -> "Good morning"

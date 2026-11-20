@@ -428,7 +428,7 @@ fun OnlinePlaylistDetailScreen(
                                         onClick = {
                                             showMenu = false
                                             val shareText = buildString {
-                                                append("Check out \"$title\" playlist on Mueso:\n")
+                                                append("Check out \"$title\" playlist on Nuclear:\n")
                                                 displayTracks.take(15).forEachIndexed { i, t ->
                                                     append("${i + 1}. ${t.title} - ${t.artist}\n")
                                                 }
@@ -750,7 +750,7 @@ fun OnlinePlaylistDetailScreen(
                                     onClick = {
                                         showActionMenu = false
                                         val shareText = buildString {
-                                            append("Check out \"$title\" playlist on Mueso:\n")
+                                            append("Check out \"$title\" playlist on Nuclear:\n")
                                             displayTracks.take(15).forEachIndexed { i, t ->
                                                 append("${i + 1}. ${t.title} - ${t.artist}\n")
                                             }

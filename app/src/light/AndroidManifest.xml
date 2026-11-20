@@ -4,7 +4,7 @@
 
     <uses-permission android:name="com.akshay.musicplayer.permission.READ_LIGHT_PROFILES" />
 
-    <!-- The full Mueso, whose provider serves this profile's playlists. -->
+    <!-- The full Nuclear app, whose provider serves this profile's playlists. -->
     <queries>
         <package android:name="com.akshay.musicplayer" />
     </queries>

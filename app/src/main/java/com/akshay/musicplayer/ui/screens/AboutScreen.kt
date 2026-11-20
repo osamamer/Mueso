@@ -85,7 +85,7 @@ fun AboutScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("About Music", color = textPrimary, fontWeight = FontWeight.Bold) },
+                title = { Text("About Nuclear", color = textPrimary, fontWeight = FontWeight.Bold) },
                 navigationIcon = {
                     IconButton(onClick = onBackClick) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = textPrimary)
@@ -118,14 +118,14 @@ fun AboutScreen(
                     // Official App Logo
                     Image(
                         painter = painterResource(id = R.drawable.ic_logo),
-                        contentDescription = "Music Logo",
+                        contentDescription = "Nuclear logo",
                         modifier = Modifier
                             .size(80.dp)
                             .clip(RoundedCornerShape(20.dp))
                     )
 
                     Text(
-                        text = "Music",
+                        text = "Nuclear",
                         color = textPrimary,
                         fontSize = 24.sp,
                         fontWeight = FontWeight.ExtraBold,
@@ -423,7 +423,7 @@ fun AboutScreen(
 
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        text = "Mueso is 100% free and open-source software distributed under the MIT License.",
+                        text = "The Android player code is free and open-source software distributed under the MIT License.",
                         color = textSub,
                         fontSize = 12.sp,
                         lineHeight = 18.sp
@@ -447,7 +447,7 @@ fun AboutScreen(
                         fontWeight = FontWeight.Medium
                     )
                     Text(
-                        text = "© 2026 Music",
+                        text = "© 2026 Akshay Kumar",
                         color = textSub.copy(alpha = 0.7f),
                         fontSize = 11.sp
                     )

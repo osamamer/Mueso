@@ -269,7 +269,7 @@ fun PlaylistDetailScreen(
                                         onClick = {
                                             showMenu = false
                                             val shareText = buildString {
-                                                append("Check out \"${playlist.name}\" on Mueso:\n")
+                                                append("Check out \"${playlist.name}\" on Nuclear:\n")
                                                 displayTracks.take(15).forEachIndexed { i, t ->
                                                     append("${i + 1}. ${t.title} - ${t.artist}\n")
                                                 }
@@ -514,7 +514,7 @@ fun PlaylistDetailScreen(
                                     onClick = {
                                         showActionMenu = false
                                         val shareText = buildString {
-                                            append("Check out \"${playlist.name}\" on Mueso:\n")
+                                            append("Check out \"${playlist.name}\" on Nuclear:\n")
                                             displayTracks.take(15).forEachIndexed { i, t ->
                                                 append("${i + 1}. ${t.title} - ${t.artist}\n")
                                             }

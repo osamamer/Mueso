@@ -12,7 +12,7 @@ import com.akshay.musicplayer.data.db.AppDatabase
 /**
  * Serves `content://com.akshay.musicplayer.lightprofiles/<profile>` to the light profile apps:
  * one row with the profile's playlists as a [LightProfileSnapshot]. Only the full app declares
- * it, guarded by a signature permission so only Mueso builds signed with the same key can read.
+ * it, guarded by a signature permission so only Nuclear builds signed with the same key can read.
  */
 class LightProfileProvider : ContentProvider() {
     override fun onCreate(): Boolean = true
@@ -48,7 +48,7 @@ class LightProfileProvider : ContentProvider() {
     }
 }
 
-/** Run by a light profile app: copies its playlists from the full Mueso, keeping the last copy if that fails. */
+/** Run by a light profile app: copies its playlists from the full Nuclear app, keeping the last copy if that fails. */
 object LightProfileSync {
     private const val TAG = "LightProfileSync"
 
@@ -63,7 +63,7 @@ object LightProfileSync {
             LightProfileSnapshot.apply(AppDatabase.getDatabase(context), snapshot)
             true
         } catch (e: Exception) {
-            Log.e(TAG, "Could not read light profile $profile from the full Mueso", e)
+            Log.e(TAG, "Could not read light profile $profile from the full Nuclear app", e)
             false
         }
     }

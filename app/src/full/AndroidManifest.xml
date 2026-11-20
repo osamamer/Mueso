@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
-    <!-- Only Mueso builds signed with the same key (the light profile apps) may read light profiles. -->
+    <!-- Only Nuclear builds signed with the same key (the light profile apps) may read light profiles. -->
     <permission
         android:name="com.akshay.musicplayer.permission.READ_LIGHT_PROFILES"
         android:protectionLevel="signature" />

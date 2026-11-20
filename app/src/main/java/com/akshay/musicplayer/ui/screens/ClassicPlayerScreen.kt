@@ -393,7 +393,7 @@ fun ClassicPlayerScreen(
                         letterSpacing = 1.5.sp
                     )
                     Text(
-                        text = track.album.ifBlank { "Mueso Master" },
+                        text = track.album.ifBlank { "Nuclear Master" },
                         color = textPrimary,
                         fontSize = 13.sp,
                         fontWeight = FontWeight.Medium,

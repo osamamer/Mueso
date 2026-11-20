@@ -154,9 +154,9 @@ private fun PlaylistList(
             )
             Spacer(Modifier.height(4.dp))
             val note = when {
-                isSyncing -> "Fetching your playlists from Mueso…"
-                syncFailed -> "Couldn't reach the full Mueso; showing the playlists from last time."
-                playlists.isEmpty() -> "No playlists yet. Choose some in Mueso → Settings → Light profiles."
+                isSyncing -> "Fetching your playlists from Nuclear…"
+                syncFailed -> "Couldn't reach the full Nuclear app. Showing the playlists from last time."
+                playlists.isEmpty() -> "No playlists yet. Choose some in Nuclear → Settings → Light profiles."
                 else -> "Only the playlists chosen for this profile."
             }
             Text(note, color = colors.onBackground.copy(alpha = 0.6f), fontSize = 13.sp)
