@@ -101,7 +101,6 @@ import com.akshay.musicplayer.ui.components.AddToPlaylistBottomSheet
 import com.akshay.musicplayer.ui.components.AudioQualityCapsule
 import com.akshay.musicplayer.ui.components.ClassicFullScreenLyricsView
 import com.akshay.musicplayer.ui.components.EqualizerBottomSheet
-import com.akshay.musicplayer.ui.components.LyricsView
 import com.akshay.musicplayer.ui.components.QueueBottomSheet
 import com.akshay.musicplayer.ui.components.SignalPathDialog
 import com.akshay.musicplayer.ui.components.SleepTimerBottomSheet
