@@ -35,7 +35,7 @@
 
 ## Android head units
 
-For a head unit that installs Android apps directly, use the full universal Mueso APK. Open Mueso on the head unit and tap a track or the mini player to open Now Playing. The wide layout activates automatically. The Offline shortcut opens device music and saved playlists.
+For a head unit that installs Android apps directly, use the full universal Mueso APK. Open Mueso on the head unit and tap a track or the mini player to open Now Playing. The wide layout activates automatically. The Offline shortcut opens saved playlists and audio in the configured download folder (by default, Music/Mueso).
 
 Phone projection through Android Auto uses a separate host interface. This APK provides Mueso's own interface for direct installation.
 

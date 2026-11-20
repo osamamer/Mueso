@@ -33,6 +33,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedIconButton
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -50,6 +51,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.media3.common.Player
 import com.akshay.musicplayer.domain.models.TrackEntity
 import com.akshay.musicplayer.ui.components.SmartArtworkImage
@@ -141,14 +143,16 @@ internal fun WidePlayerContent(
                     ) {
                         Text(
                             track.title,
-                            style = MaterialTheme.typography.headlineSmall,
+                            fontSize = 30.sp,
+                            lineHeight = 34.sp,
                             fontWeight = FontWeight.Bold,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
                         Text(
                             track.artist,
-                            style = MaterialTheme.typography.titleMedium,
+                            fontSize = 20.sp,
+                            lineHeight = 26.sp,
                             color = colors.onBackground.copy(alpha = 0.75f),
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
@@ -159,7 +163,7 @@ internal fun WidePlayerContent(
                             horizontalArrangement = Arrangement.SpaceEvenly,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            IconButton(onClick = viewModel::playPreviousTrack, modifier = Modifier.size(56.dp)) {
+                            OutlinedIconButton(onClick = viewModel::playPreviousTrack, modifier = Modifier.size(56.dp)) {
                                 Icon(Icons.Default.SkipPrevious, "Previous track", Modifier.size(34.dp))
                             }
                             FilledIconButton(
@@ -180,7 +184,7 @@ internal fun WidePlayerContent(
                                     )
                                 }
                             }
-                            IconButton(onClick = viewModel::playNextTrack, modifier = Modifier.size(56.dp)) {
+                            OutlinedIconButton(onClick = viewModel::playNextTrack, modifier = Modifier.size(56.dp)) {
                                 Icon(Icons.Default.SkipNext, "Next track", Modifier.size(34.dp))
                             }
                         }
