@@ -106,8 +106,6 @@ class SettingsManager(private val sharedPreferences: SharedPreferences) {
     val crossfadeSeconds: StateFlow<Int> = _crossfadeSeconds.asStateFlow()
 
     // Layout & Theme Preferences
-    private val _playerLayoutStyle = MutableStateFlow(sharedPreferences.getString("player_layout_style", "reels") ?: "reels")
-    val playerLayoutStyle: StateFlow<String> = _playerLayoutStyle.asStateFlow()
 
     private val prefChangeListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
         when (key) {
@@ -231,14 +229,6 @@ class SettingsManager(private val sharedPreferences: SharedPreferences) {
         sharedPreferences.edit().putBoolean("skip_intro_outro", enabled).apply()
     }
 
-    private val _playButtonPosition = MutableStateFlow(sharedPreferences.getString("play_button_position", "Left") ?: "Left")
-    val playButtonPosition: StateFlow<String> = _playButtonPosition.asStateFlow()
-
-    fun setPlayButtonPosition(position: String) {
-        _playButtonPosition.value = position
-        sharedPreferences.edit().putString("play_button_position", position).apply()
-    }
-
     fun setSkipNonMusicOffTopic(enabled: Boolean) {
         _skipNonMusicOffTopic.value = enabled
         sharedPreferences.edit().putBoolean("skip_non_music_off_topic", enabled).apply()
@@ -274,10 +264,6 @@ class SettingsManager(private val sharedPreferences: SharedPreferences) {
         sharedPreferences.edit().putInt("crossfade_seconds", seconds).apply()
     }
 
-    fun setPlayerLayoutStyle(style: String) {
-        _playerLayoutStyle.value = style
-        sharedPreferences.edit().putString("player_layout_style", style).apply()
-    }
 
     fun reloadFromPreferences() {
         _isDarkMode.value = sharedPreferences.getBoolean("is_dark_mode", true)
@@ -302,7 +288,6 @@ class SettingsManager(private val sharedPreferences: SharedPreferences) {
         _skipInteraction.value = sharedPreferences.getBoolean("skip_interaction", true)
         _skipIntroOutro.value = sharedPreferences.getBoolean("skip_intro_outro", true)
         _skipNonMusicOffTopic.value = sharedPreferences.getBoolean("skip_non_music_off_topic", true)
-        _playButtonPosition.value = sharedPreferences.getString("play_button_position", "Left") ?: "Left"
         _losslessStreamingEnabled.value = sharedPreferences.getBoolean("lossless_streaming_enabled", false)
         _losslessServerUrl.value = sharedPreferences.getString("lossless_server_url", com.akshay.musicplayer.data.remote.lossless.LosslessMusicRepository.DEFAULT_SERVER_URL)
             ?.let { if (it.contains("clashflac.kanjijewels.com", ignoreCase = true) || it.contains("qobuz.kanjijewels.com", ignoreCase = true)) com.akshay.musicplayer.data.remote.lossless.LosslessMusicRepository.DEFAULT_SERVER_URL else it }
@@ -311,6 +296,5 @@ class SettingsManager(private val sharedPreferences: SharedPreferences) {
         _isBitPerfectEnabled.value = sharedPreferences.getBoolean("bit_perfect_mode", false)
         _crossfadeEnabled.value = sharedPreferences.getBoolean("crossfade_enabled", false)
         _crossfadeSeconds.value = sharedPreferences.getInt("crossfade_seconds", 5)
-        _playerLayoutStyle.value = sharedPreferences.getString("player_layout_style", "reels") ?: "reels"
     }
 }

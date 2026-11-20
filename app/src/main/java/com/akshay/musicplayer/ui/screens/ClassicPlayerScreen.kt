@@ -43,6 +43,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -117,7 +119,8 @@ fun ClassicPlayerScreen(
     track: TrackEntity,
     viewModel: PlayerViewModel,
     onCollapseClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onNavigateAway: () -> Unit = onCollapseClick
 ) {
     var isLyricsVisible by remember { mutableStateOf(false) }
 
@@ -214,6 +217,115 @@ fun ClassicPlayerScreen(
             .map { it.index to it.value }
     }
 
+    val albumArtUri = remember(track.id, track.artworkUrl, track.albumId, track.filePath) {
+        when {
+            !track.artworkUrl.isNullOrBlank() -> track.artworkUrl
+            track.id > 0L && !track.filePath.startsWith("online:") && !track.filePath.startsWith("http") ->
+                "content://media/external/audio/media/${track.id}"
+            track.filePath.isNotBlank() && !track.filePath.startsWith("online:") -> track.filePath
+            track.albumId > 0L -> "content://media/external/audio/albumart/${track.albumId}"
+            else -> null
+        }
+    }
+
+    val quickActions: @Composable (Boolean) -> Unit = { includeQueue ->
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 8.dp),
+            horizontalArrangement = Arrangement.SpaceAround,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            IconButton(
+                onClick = { isLyricsVisible = !isLyricsVisible }
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Lyrics,
+                    contentDescription = "Lyrics",
+                    tint = if (isLyricsVisible) accent else textSecondary,
+                    modifier = Modifier.size(22.dp)
+                )
+            }
+
+            IconButton(onClick = { showSleepTimerSheet = true }) {
+                Icon(
+                    imageVector = Icons.Default.AvTimer,
+                    contentDescription = "Sleep Timer",
+                    tint = textSecondary,
+                    modifier = Modifier.size(22.dp)
+                )
+            }
+
+            if (includeQueue) {
+                IconButton(onClick = { showQueueSheet = true }) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.QueueMusic,
+                        contentDescription = "Queue",
+                        tint = textSecondary,
+                        modifier = Modifier.size(22.dp)
+                    )
+                }
+            }
+
+            IconButton(
+                onClick = {
+                    if (isDownloading) {
+                        viewModel.cancelDownload(track.id)
+                    } else if (!isDownloaded) {
+                        viewModel.downloadOnlineTrack(context, track)
+                    }
+                }
+            ) {
+                when {
+                    isDownloading -> {
+                        Box(
+                            contentAlignment = Alignment.Center,
+                            modifier = Modifier.size(22.dp)
+                        ) {
+                            CircularProgressIndicator(
+                                progress = { if (downloadProgress > 0f) downloadProgress else 0.5f },
+                                modifier = Modifier.size(20.dp),
+                                color = accent,
+                                strokeWidth = 2.dp
+                            )
+                            Icon(
+                                imageVector = Icons.Default.Close,
+                                contentDescription = "Cancel Download",
+                                tint = accent,
+                                modifier = Modifier.size(10.dp)
+                            )
+                        }
+                    }
+                    isDownloaded -> {
+                        Icon(
+                            imageVector = Icons.Default.CheckCircle,
+                            contentDescription = "Downloaded",
+                            tint = Color(0xFF4CAF50),
+                            modifier = Modifier.size(22.dp)
+                        )
+                    }
+                    else -> {
+                        Icon(
+                            imageVector = Icons.Default.Download,
+                            contentDescription = "Download Song",
+                            tint = textSecondary,
+                            modifier = Modifier.size(22.dp)
+                        )
+                    }
+                }
+            }
+
+            IconButton(onClick = { showAddToPlaylistSheet = true }) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.PlaylistAdd,
+                    contentDescription = "Add to Playlist",
+                    tint = textSecondary,
+                    modifier = Modifier.size(22.dp)
+                )
+            }
+        }
+    }
+
     Box(
         modifier = modifier
             .fillMaxSize()
@@ -225,6 +337,19 @@ fun ClassicPlayerScreen(
             )
     ) {
       BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+        if (maxWidth >= 360.dp && maxWidth > maxHeight) {
+            WidePlayerContent(
+                track = track,
+                artworkUri = albumArtUri,
+                playbackState = playbackState,
+                viewModel = viewModel,
+                onCollapse = onCollapseClick,
+                onOpenQueue = { showQueueSheet = true },
+                onOpenMenu = { showTrackMenuSheet = true },
+                quickActions = { quickActions(false) },
+                modifier = Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing)
+            )
+        } else {
         val viewportHeight = maxHeight
         val navBarBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
         // How much of the lyrics card peeks above the bottom edge, hinting "scroll for more"
@@ -239,7 +364,7 @@ fun ClassicPlayerScreen(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(viewportHeight - peekHeight - navBarBottom)
+                .height((viewportHeight - peekHeight - navBarBottom).coerceAtLeast(360.dp))
                 .statusBarsPadding()
                 .padding(horizontal = 24.dp)
         ) {
@@ -297,16 +422,6 @@ fun ClassicPlayerScreen(
                 contentAlignment = Alignment.Center
             ) {
                 val artCorner = 20.dp
-                val albumArtUri = remember(track.id, track.artworkUrl, track.albumId, track.filePath) {
-                    when {
-                        !track.artworkUrl.isNullOrBlank() -> track.artworkUrl
-                        track.id > 0L && !track.filePath.startsWith("online:") && !track.filePath.startsWith("http") ->
-                            "content://media/external/audio/media/${track.id}"
-                        track.filePath.isNotBlank() && !track.filePath.startsWith("online:") -> track.filePath
-                        track.albumId > 0L -> "content://media/external/audio/albumart/${track.albumId}"
-                        else -> null
-                    }
-                }
                 SmartArtworkImage(
                     artworkUrl = albumArtUri,
                     contentDescription = "Album Artwork",
@@ -503,100 +618,7 @@ fun ClassicPlayerScreen(
                     }
                 }
 
-                // Quick Action Utilities: Lyrics, Sleep, Queue, EQ, Add to Playlist
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 8.dp),
-                    horizontalArrangement = Arrangement.SpaceAround,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    IconButton(
-                        onClick = { isLyricsVisible = !isLyricsVisible }
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Lyrics,
-                            contentDescription = "Lyrics",
-                            tint = if (isLyricsVisible) accent else textSecondary,
-                            modifier = Modifier.size(22.dp)
-                        )
-                    }
-
-                    IconButton(onClick = { showSleepTimerSheet = true }) {
-                        Icon(
-                            imageVector = Icons.Default.AvTimer,
-                            contentDescription = "Sleep Timer",
-                            tint = textSecondary,
-                            modifier = Modifier.size(22.dp)
-                        )
-                    }
-
-                    IconButton(onClick = { showQueueSheet = true }) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.QueueMusic,
-                            contentDescription = "Queue",
-                            tint = textSecondary,
-                            modifier = Modifier.size(22.dp)
-                        )
-                    }
-
-                    IconButton(
-                        onClick = {
-                            if (isDownloading) {
-                                viewModel.cancelDownload(track.id)
-                            } else if (!isDownloaded) {
-                                viewModel.downloadOnlineTrack(context, track)
-                            }
-                        }
-                    ) {
-                        when {
-                            isDownloading -> {
-                                Box(
-                                    contentAlignment = Alignment.Center,
-                                    modifier = Modifier.size(22.dp)
-                                ) {
-                                    CircularProgressIndicator(
-                                        progress = { if (downloadProgress > 0f) downloadProgress else 0.5f },
-                                        modifier = Modifier.size(20.dp),
-                                        color = accent,
-                                        strokeWidth = 2.dp
-                                    )
-                                    Icon(
-                                        imageVector = Icons.Default.Close,
-                                        contentDescription = "Cancel Download",
-                                        tint = accent,
-                                        modifier = Modifier.size(10.dp)
-                                    )
-                                }
-                            }
-                            isDownloaded -> {
-                                Icon(
-                                    imageVector = Icons.Default.CheckCircle,
-                                    contentDescription = "Downloaded",
-                                    tint = Color(0xFF4CAF50),
-                                    modifier = Modifier.size(22.dp)
-                                )
-                            }
-                            else -> {
-                                Icon(
-                                    imageVector = Icons.Default.Download,
-                                    contentDescription = "Download Song",
-                                    tint = textSecondary,
-                                    modifier = Modifier.size(22.dp)
-                                )
-                            }
-                        }
-                    }
-
-                    IconButton(onClick = { showAddToPlaylistSheet = true }) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.PlaylistAdd,
-                            contentDescription = "Add to Playlist",
-                            tint = textSecondary,
-                            modifier = Modifier.size(22.dp)
-                        )
-                    }
-                }
+                quickActions(true)
             }
         }
 
@@ -634,6 +656,7 @@ fun ClassicPlayerScreen(
         LaunchedEffect(track.id) {
             if (pageScrollState.value > 0) pageScrollState.animateScrollTo(0)
         }
+        }
       }
 
         // ─── Full-Screen Synced Lyrics Overlay ───
@@ -667,12 +690,10 @@ fun ClassicPlayerScreen(
             isPlaylistContext = isPlaylistContext,
             onGoToArtist = {
                 viewModel.openArtistByName(track.artist)
-                onCollapseClick()
+                onNavigateAway()
             },
             onGoToAlbum = {
-                viewModel.openAlbumForCurrentTrack(track) {
-                    onCollapseClick()
-                }
+                viewModel.openAlbumForCurrentTrack(track, onNavigateAway)
             },
             onShowSignalPath = { showSignalPathDialog = true },
             onShowEqualizer = { showEqualizerSheet = true },
@@ -763,7 +784,7 @@ fun ClassicPlayerScreen(
     }
 }
 
-private fun formatTime(millis: Long): String {
+internal fun formatTime(millis: Long): String {
     val totalSeconds = (millis / 1000).coerceAtLeast(0)
     val minutes = totalSeconds / 60
     val seconds = totalSeconds % 60

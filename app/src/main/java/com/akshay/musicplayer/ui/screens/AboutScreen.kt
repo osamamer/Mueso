@@ -306,7 +306,7 @@ fun AboutScreen(
                     LinkRow(
                         icon = Icons.Default.Favorite,
                         title = "Resso (by ByteDance)",
-                        subtitle = "Core UI/UX inspiration for Mueso's reels-style vertical music player (now discontinued)",
+                        subtitle = "Inspiration for Mueso’s original playback interface",
                         onClick = {
                             try {
                                 uriHandler.openUri("https://en.wikipedia.org/wiki/Resso")

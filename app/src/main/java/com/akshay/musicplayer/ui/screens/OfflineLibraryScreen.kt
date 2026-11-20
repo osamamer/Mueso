@@ -107,10 +107,8 @@ fun OfflineLibraryScreen(
     val playlists by viewModel.playlists.collectAsState()
     val onlinePlaylists by viewModel.onlinePlaylists.collectAsState()
     val isDarkMode by viewModel.isDarkMode.collectAsState()
-    val playerLayoutStyle by viewModel.playerLayoutStyle.collectAsState()
     val playbackState by viewModel.playbackState.collectAsState()
-    val isClassic = playerLayoutStyle == "classic"
-    val hasTrackPlaying = playbackState.currentTrackId != 0L
+    val hasTrackPlaying = playbackState.currentTrackId != null
 
     Box(
         modifier = Modifier
@@ -172,9 +170,7 @@ fun OfflineLibraryScreen(
                 }
             }
 
-            val bottomPadding = if (isClassic) {
-                if (hasTrackPlaying) 140.dp else 80.dp
-            } else 80.dp
+            val bottomPadding = if (hasTrackPlaying) 140.dp else 80.dp
 
             // Animated tab content
             AnimatedContent(

@@ -262,7 +262,6 @@ class PlayerViewModel(
     val enableLyrics = settingsManager.enableLyrics
     val embedLyricsInDownload = settingsManager.embedLyricsInDownload
     val preferredLanguage = settingsManager.preferredLanguage
-    val playButtonPosition = settingsManager.playButtonPosition
     val enableSponsorBlock = settingsManager.enableSponsorBlock
     val skipSponsor = settingsManager.skipSponsor
     val skipSelfPromo = settingsManager.skipSelfPromo
@@ -278,7 +277,6 @@ class PlayerViewModel(
     val isBitPerfectEnabled = settingsManager.isBitPerfectEnabled
     val crossfadeEnabled = settingsManager.crossfadeEnabled
     val crossfadeSeconds = settingsManager.crossfadeSeconds
-    val playerLayoutStyle = settingsManager.playerLayoutStyle
 
     fun setDarkMode(enabled: Boolean) = settingsManager.setDarkMode(enabled)
     fun setThemeMode(mode: String) = settingsManager.setThemeMode(mode)
@@ -303,7 +301,6 @@ class PlayerViewModel(
         settingsManager.setPreferredLanguage(language)
         playlistManager.clearCuratedCache()
     }
-    fun setPlayButtonPosition(position: String) = settingsManager.setPlayButtonPosition(position)
     fun setEnableSponsorBlock(enabled: Boolean) = settingsManager.setEnableSponsorBlock(enabled)
     fun setSkipSponsor(enabled: Boolean) = settingsManager.setSkipSponsor(enabled)
     fun setSkipSelfPromo(enabled: Boolean) = settingsManager.setSkipSelfPromo(enabled)
@@ -335,7 +332,6 @@ class PlayerViewModel(
     }
     fun setCrossfadeEnabled(enabled: Boolean) = settingsManager.setCrossfadeEnabled(enabled)
     fun setCrossfadeSeconds(seconds: Int) = settingsManager.setCrossfadeSeconds(seconds)
-    fun setPlayerLayoutStyle(style: String) = settingsManager.setPlayerLayoutStyle(style)
 
     val searchQuery = searchManager.searchQuery
     val searchCategory = searchManager.searchCategory
@@ -517,37 +513,6 @@ class PlayerViewModel(
     fun performDriveBackup(context: android.content.Context, onResult: (Boolean, String) -> Unit = { _, _ -> }) = backupManager.performDriveBackup(context, onResult)
     fun performDriveRestore(context: android.content.Context, onResult: (Boolean, String) -> Unit = { _, _ -> }) = backupManager.performDriveRestore(context, onResult)
     fun signOutGoogle(context: android.content.Context) = backupManager.signOutGoogle(context)
-
-    fun getTrackBackgroundBias(track: com.akshay.musicplayer.domain.models.TrackEntity?): Float {
-        if (track == null) return 0f
-        val idKey = "bg_bias_${track.id}"
-        if (sharedPreferences.contains(idKey)) {
-            return sharedPreferences.getFloat(idKey, 0f)
-        }
-        val videoId = onlineRepository.extractVideoId(track)
-        val videoKey = "bg_bias_$videoId"
-        if (sharedPreferences.contains(videoKey)) {
-            return sharedPreferences.getFloat(videoKey, 0f)
-        }
-        val titleArtistKey = "bg_bias_${track.title.trim().lowercase()}_${track.artist.trim().lowercase()}"
-        return sharedPreferences.getFloat(titleArtistKey, 0f)
-    }
-
-    fun saveTrackBackgroundBias(track: com.akshay.musicplayer.domain.models.TrackEntity?, bias: Float) {
-        if (track == null) return
-        val idKey = "bg_bias_${track.id}"
-        val videoId = onlineRepository.extractVideoId(track)
-        val videoKey = "bg_bias_$videoId"
-        val titleArtistKey = "bg_bias_${track.title.trim().lowercase()}_${track.artist.trim().lowercase()}"
-        
-        sharedPreferences.edit()
-            .putFloat(idKey, bias)
-            .putFloat(videoKey, bias)
-            .putFloat(titleArtistKey, bias)
-            .apply()
-        
-        backupManager.markDirty()
-    }
 
     val downloadStates = downloadManager.downloadStates
     fun downloadOnlineTrack(context: android.content.Context, track: com.akshay.musicplayer.domain.models.TrackEntity) = downloadManager.downloadOnlineTrack(context, track)

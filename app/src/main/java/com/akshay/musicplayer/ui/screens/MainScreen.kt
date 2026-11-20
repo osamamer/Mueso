@@ -2,23 +2,19 @@
 package com.akshay.musicplayer.ui.screens
 
 import com.akshay.musicplayer.ui.components.SwipeToQueue
-import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.expandHorizontally
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
-import androidx.compose.animation.shrinkHorizontally
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
-import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -27,16 +23,14 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.pager.HorizontalPager
-import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -57,9 +51,7 @@ import androidx.compose.ui.unit.sp
 import com.akshay.musicplayer.data.db.PlaylistEntity
 import com.akshay.musicplayer.data.db.OnlinePlaylistEntity
 import com.akshay.musicplayer.ui.components.DockedMiniPlayer
-import com.akshay.musicplayer.ui.screens.ClassicPlayerScreen
 import com.akshay.musicplayer.ui.viewmodel.PlayerViewModel
-import kotlinx.coroutines.launch
 
 private val BgDark: Color
     @Composable
@@ -73,8 +65,6 @@ private val AccentOrange: Color
 @Composable
 fun MainScreen(viewModel: PlayerViewModel) {
     val context = androidx.compose.ui.platform.LocalContext.current
-    val pagerState = rememberPagerState(initialPage = 1, pageCount = { 3 })
-    val coroutineScope = rememberCoroutineScope()
     var selectedPlaylist by remember { mutableStateOf<PlaylistEntity?>(null) }
     var selectedMuesoPlaylist by remember { mutableStateOf<OnlinePlaylistEntity?>(null) }
     var playlistToReturnTo by remember { mutableStateOf<PlaylistEntity?>(null) }
@@ -93,8 +83,8 @@ fun MainScreen(viewModel: PlayerViewModel) {
     val hasUnbackedUpChanges by viewModel.hasUnbackedUpChanges.collectAsState()
     val googleAccount by viewModel.googleAccount.collectAsState()
 
-    val playerLayoutStyle by viewModel.playerLayoutStyle.collectAsState()
-    var showLibrary by remember { mutableStateOf(false) }
+    var browsePage by remember { mutableStateOf<BrowsePage?>(null) }
+    var isExploreDetailOpen by remember { mutableStateOf(false) }
     var isClassicPlayerExpanded by remember { mutableStateOf(false) }
 
     val playbackState by viewModel.playbackState.collectAsState()
@@ -113,59 +103,40 @@ fun MainScreen(viewModel: PlayerViewModel) {
         viewModel.getQueueTracks().firstOrNull { it.id == playbackState.currentTrackId }
     }
 
-    val navigateToPlayer: () -> Unit = {
+    val clearPlayerReturn = {
         playlistToReturnTo = null
         muesoPlaylistToReturnTo = null
         onlinePlaylistToReturnTo = null
-        if (playerLayoutStyle == "classic") {
-            isClassicPlayerExpanded = true
-        } else {
-            coroutineScope.launch { pagerState.animateScrollToPage(1) }
-        }
+    }
+
+    val navigateToPlayer: () -> Unit = {
+        clearPlayerReturn()
+        isClassicPlayerExpanded = true
     }
 
     val navigateToPlayerFromLocalPlaylist: () -> Unit = {
         playlistToReturnTo = selectedPlaylist
         selectedPlaylist = null
-        if (playerLayoutStyle == "classic") {
-            isClassicPlayerExpanded = true
-        } else {
-            coroutineScope.launch { pagerState.animateScrollToPage(1) }
-        }
+        isClassicPlayerExpanded = true
     }
 
     val navigateToPlayerFromMuesoPlaylist: () -> Unit = {
         muesoPlaylistToReturnTo = selectedMuesoPlaylist
         selectedMuesoPlaylist = null
-        if (playerLayoutStyle == "classic") {
-            isClassicPlayerExpanded = true
-        } else {
-            coroutineScope.launch { pagerState.animateScrollToPage(1) }
-        }
+        isClassicPlayerExpanded = true
     }
 
     val navigateToPlayerFromOnlinePlaylist: (com.akshay.musicplayer.ui.screens.SelectedOnlinePlaylist) -> Unit = { playlist ->
         onlinePlaylistToReturnTo = playlist
         viewModel.closeSelectedOnlinePlaylist()
-        if (playerLayoutStyle == "classic") {
-            isClassicPlayerExpanded = true
-        } else {
-            coroutineScope.launch { pagerState.animateScrollToPage(1) }
-        }
+        isClassicPlayerExpanded = true
     }
 
-    androidx.activity.compose.BackHandler(enabled = showLibrary && playerLayoutStyle == "classic") {
-        showLibrary = false
+    androidx.activity.compose.BackHandler(enabled = browsePage != null) {
+        browsePage = null
     }
 
-    androidx.activity.compose.BackHandler(enabled = isClassicPlayerExpanded) {
-        isClassicPlayerExpanded = false
-    }
-
-    val canReturnToPlaylist =
-        (playerLayoutStyle == "classic" && (playlistToReturnTo != null || muesoPlaylistToReturnTo != null || onlinePlaylistToReturnTo != null)) ||
-            (playerLayoutStyle != "classic" && pagerState.currentPage == 1 && (playlistToReturnTo != null || muesoPlaylistToReturnTo != null || onlinePlaylistToReturnTo != null))
-    androidx.activity.compose.BackHandler(enabled = canReturnToPlaylist) {
+    val returnFromPlayer: () -> Unit = {
         playlistToReturnTo?.let {
             selectedPlaylist = it
             playlistToReturnTo = null
@@ -179,9 +150,6 @@ fun MainScreen(viewModel: PlayerViewModel) {
             onlinePlaylistToReturnTo = null
         }
         isClassicPlayerExpanded = false
-        if (playerLayoutStyle != "classic") {
-            coroutineScope.launch { pagerState.animateScrollToPage(0) }
-        }
     }
 
     androidx.activity.compose.BackHandler(enabled = selectedArtistPage != null) {
@@ -192,7 +160,8 @@ fun MainScreen(viewModel: PlayerViewModel) {
         viewModel.closeSelectedOnlinePlaylist()
     }
 
-    androidx.activity.compose.BackHandler(enabled = selectedMuesoPlaylist != null) {
+    androidx.activity.compose.BackHandler(enabled = selectedPlaylist != null || selectedMuesoPlaylist != null) {
+        selectedPlaylist = null
         selectedMuesoPlaylist = null
     }
 
@@ -205,16 +174,10 @@ fun MainScreen(viewModel: PlayerViewModel) {
         viewModel.setSearchQuery("")
     }
 
-    androidx.activity.compose.BackHandler(enabled = playerLayoutStyle != "classic" && pagerState.currentPage != 1 && selectedPlaylist == null && selectedMuesoPlaylist == null && selectedArtistPage == null && selectedOnlinePlaylist == null && !isSearchActive && !showSettingsScreen) {
-        coroutineScope.launch { pagerState.animateScrollToPage(1) }
-    }
-
-    androidx.activity.compose.BackHandler(enabled = (playerLayoutStyle == "classic" || pagerState.currentPage == 1) && !isClassicPlayerExpanded && selectedPlaylist == null && selectedMuesoPlaylist == null && selectedArtistPage == null && selectedOnlinePlaylist == null && !isSearchActive && !showSettingsScreen && !(showLibrary && playerLayoutStyle == "classic") && hasUnbackedUpChanges && googleAccount != null) {
+    androidx.activity.compose.BackHandler(enabled = browsePage == null && !isClassicPlayerExpanded && selectedPlaylist == null && selectedMuesoPlaylist == null && selectedArtistPage == null && selectedOnlinePlaylist == null && !isSearchActive && !showSettingsScreen && hasUnbackedUpChanges && googleAccount != null) {
         viewModel.performDriveBackup(context)
         (context as? android.app.Activity)?.moveTaskToBack(true)
     }
-
-    var isOnlineDetailActive by remember { mutableStateOf(false) }
 
     val isDarkMode by viewModel.isDarkMode.collectAsState()
 
@@ -270,139 +233,88 @@ fun MainScreen(viewModel: PlayerViewModel) {
                 .padding(innerPadding)
                 .graphicsLayer { translationX = shakeOffset.value }
         ) {
-            val isClassic = playerLayoutStyle == "classic"
-            val isOnlineActive = if (isClassic) false else pagerState.currentPage == 2
+            val googlePhotoUrl = googleAccount?.photoUrl?.toString()
+            HomeScreen(
+                viewModel = viewModel,
+                googlePhotoUrl = googlePhotoUrl,
+                onOpenLibrary = { browsePage = BrowsePage.Library },
+                onOpenOffline = { browsePage = BrowsePage.Offline },
+                onOpenExplore = {
+                    isExploreDetailOpen = false
+                    browsePage = BrowsePage.Explore
+                },
+                onOpenSettings = { showSettingsScreen = true },
+                onSearchClick = { isSearchActive = true },
+                onPlaylistClick = { selectedPlaylist = it },
+                onOnlinePlaylistClick = { selectedMuesoPlaylist = it }
+            )
 
-            if (isClassic) {
-                // ─── CLASSIC: Spotify-style home, library behind the profile picture ───
-                val googlePhotoUrl = googleAccount?.photoUrl?.toString()
-                HomeScreen(
+            androidx.compose.animation.AnimatedVisibility(
+                visible = browsePage == BrowsePage.Library,
+                enter = androidx.compose.animation.slideInHorizontally(
+                    initialOffsetX = { -it },
+                    animationSpec = tween(280, easing = FastOutSlowInEasing)
+                ) + androidx.compose.animation.fadeIn(tween(200)),
+                exit = androidx.compose.animation.slideOutHorizontally(
+                    targetOffsetX = { -it },
+                    animationSpec = tween(240, easing = FastOutSlowInEasing)
+                ) + androidx.compose.animation.fadeOut(tween(180)),
+                modifier = Modifier.fillMaxSize()
+            ) {
+                LibraryScreen(
                     viewModel = viewModel,
                     googlePhotoUrl = googlePhotoUrl,
-                    onOpenLibrary = { showLibrary = true },
+                    onBack = { browsePage = null },
                     onOpenSettings = { showSettingsScreen = true },
-                    onSearchClick = { isSearchActive = true },
                     onPlaylistClick = { selectedPlaylist = it },
                     onOnlinePlaylistClick = { selectedMuesoPlaylist = it }
                 )
-
-                androidx.compose.animation.AnimatedVisibility(
-                    visible = showLibrary,
-                    enter = androidx.compose.animation.slideInHorizontally(
-                        initialOffsetX = { -it },
-                        animationSpec = tween(280, easing = FastOutSlowInEasing)
-                    ) + androidx.compose.animation.fadeIn(tween(200)),
-                    exit = androidx.compose.animation.slideOutHorizontally(
-                        targetOffsetX = { -it },
-                        animationSpec = tween(240, easing = FastOutSlowInEasing)
-                    ) + androidx.compose.animation.fadeOut(tween(180)),
-                    modifier = Modifier.fillMaxSize()
-                ) {
-                    LibraryScreen(
-                        viewModel = viewModel,
-                        googlePhotoUrl = googlePhotoUrl,
-                        onBack = { showLibrary = false },
-                        onOpenSettings = { showSettingsScreen = true },
-                        onPlaylistClick = { selectedPlaylist = it },
-                        onOnlinePlaylistClick = { selectedMuesoPlaylist = it }
-                    )
-                }
-
-                // Full-screen Classic Player Expansion (Animates directly into/from floating mini player)
-                androidx.compose.animation.AnimatedVisibility(
-                    visible = isClassicPlayerExpanded && currentTrack != null,
-                    modifier = Modifier.fillMaxSize(),
-                    enter = androidx.compose.animation.slideInVertically(
-                        initialOffsetY = { (it * 0.80f).toInt() },
-                        animationSpec = androidx.compose.animation.core.spring(
-                            dampingRatio = 0.85f,
-                            stiffness = 400f
-                        )
-                    ) + androidx.compose.animation.scaleIn(
-                        initialScale = 0.40f,
-                        transformOrigin = TransformOrigin(0.5f, 0.90f),
-                        animationSpec = androidx.compose.animation.core.spring(
-                            dampingRatio = 0.85f,
-                            stiffness = 400f
-                        )
-                    ) + androidx.compose.animation.fadeIn(androidx.compose.animation.core.tween(200)),
-                    exit = androidx.compose.animation.slideOutVertically(
-                        targetOffsetY = { (it * 0.80f).toInt() },
-                        animationSpec = androidx.compose.animation.core.tween(260, easing = FastOutSlowInEasing)
-                    ) + androidx.compose.animation.scaleOut(
-                        targetScale = 0.40f,
-                        transformOrigin = TransformOrigin(0.5f, 0.90f),
-                        animationSpec = androidx.compose.animation.core.tween(260, easing = FastOutSlowInEasing)
-                    ) + androidx.compose.animation.fadeOut(androidx.compose.animation.core.tween(220))
-                ) {
-                    if (currentTrack != null) {
-                        ClassicPlayerScreen(
-                            track = currentTrack,
-                            viewModel = viewModel,
-                            onCollapseClick = { isClassicPlayerExpanded = false }
-                        )
-                    }
-                }
-
-            } else {
-                // ─── REELS VERTICAL SWIPER & 3-PAGE PAGER ARCHITECTURE ───
-                HorizontalPager(
-                    state = pagerState,
-                    modifier = Modifier.fillMaxSize(),
-                    userScrollEnabled = !isSearchActive
-                ) { page ->
-                    when (page) {
-                        0 -> OfflineLibraryScreen(
-                            viewModel = viewModel,
-                            onNavigateToPlayer = navigateToPlayer,
-                            onPlaylistClick = { selectedPlaylist = it },
-                            onOnlinePlaylistClick = { selectedMuesoPlaylist = it }
-                        )
-                        1 -> PlayerScreen(viewModel = viewModel)
-                        2 -> OnlinePlaylistsScreen(
-                            viewModel = viewModel,
-                            onNavigateToPlayer = navigateToPlayer,
-                            onDetailVisibilityChanged = { isOnlineDetailActive = it }
-                        )
-                    }
-                }
             }
 
-            val activeQueue by viewModel.activeQueue.collectAsState()
-            val hasTrackPlaying = activeQueue.isNotEmpty() || currentTrack != null
-
-            // Top Navigation Bar with integrated search (hidden when viewing a playlist detail on active page, settings, or full player)
-            val shouldHideTopBar = if (isClassic) {
-                !isSearchActive || (selectedPlaylist != null) || (selectedMuesoPlaylist != null) || (selectedArtistPage != null) || (selectedOnlinePlaylist != null) || isClassicPlayerExpanded
-            } else {
-                (selectedPlaylist != null) || (selectedMuesoPlaylist != null) || (selectedArtistPage != null) || (selectedOnlinePlaylist != null) || (pagerState.currentPage == 2 && isOnlineDetailActive)
-            }
-
-            if (isClassic && !shouldHideTopBar) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(if (isDarkMode) BgDark else Color.White)
+            if (browsePage == BrowsePage.Offline) {
+                OfflineLibraryScreen(
+                    viewModel = viewModel,
+                    onNavigateToPlayer = navigateToPlayer,
+                    onPlaylistClick = { selectedPlaylist = it },
+                    onOnlinePlaylistClick = { selectedMuesoPlaylist = it }
                 )
             }
+            if (browsePage == BrowsePage.Explore) {
+                OnlinePlaylistsScreen(
+                    viewModel = viewModel,
+                    onNavigateToPlayer = navigateToPlayer,
+                    onDetailVisibilityChanged = { isExploreDetailOpen = it }
+                )
+            }
+            val showBrowseBack = browsePage == BrowsePage.Offline ||
+                (browsePage == BrowsePage.Explore && !isExploreDetailOpen)
+            if (showBrowseBack) {
+                Surface(color = MaterialTheme.colorScheme.background) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().statusBarsPadding().height(60.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        IconButton(onClick = { browsePage = null }) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back to home")
+                        }
+                        Text(
+                            if (browsePage == BrowsePage.Offline) "Offline library" else "Explore",
+                            style = MaterialTheme.typography.titleMedium
+                        )
+                    }
+                }
+            }
 
-            if (!shouldHideTopBar) {
-                TopNavigationBarWithSearch(
-                    isOnlineActive = isOnlineActive,
-                    isSearchActive = isSearchActive,
+            if (isSearchActive) {
+                Box(Modifier.fillMaxSize().background(if (isDarkMode) BgDark else Color.White))
+                SearchBar(
                     searchQuery = searchQuery,
                     isDarkMode = isDarkMode,
-                    currentPage = if (isClassic) 0 else pagerState.currentPage,
-                    hasTrackPlaying = hasTrackPlaying,
-                    onSearchClick = { isSearchActive = true },
-                    onSearchClose = {
+                    onClose = {
                         isSearchActive = false
                         viewModel.setSearchQuery("")
                     },
-                    onQueryChange = { viewModel.setSearchQuery(it) },
-                    onSettingsClick = { showSettingsScreen = true },
-                    googleAccount = googleAccount,
-                    modifier = Modifier.align(Alignment.TopCenter)
+                    onQueryChange = { viewModel.setSearchQuery(it) }
                 )
             }
 
@@ -421,6 +333,7 @@ fun MainScreen(viewModel: PlayerViewModel) {
                     .align(Alignment.TopCenter)
                     .statusBarsPadding()
                     .padding(top = 60.dp)
+                    .imePadding()
             ) {
                 val results by viewModel.searchResults.collectAsState()
                 val artistResults by viewModel.artistResults.collectAsState()
@@ -446,6 +359,7 @@ fun MainScreen(viewModel: PlayerViewModel) {
 
                 Column(
                     modifier = Modifier
+                        .widthIn(max = 760.dp)
                         .fillMaxWidth()
                         .padding(horizontal = 16.dp)
                         .heightIn(max = 440.dp)
@@ -803,23 +717,6 @@ fun MainScreen(viewModel: PlayerViewModel) {
                 }
             }
 
-            // Scrim when search is active
-            if (isSearchActive) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .statusBarsPadding()
-                        .padding(top = if (searchQuery.isNotEmpty()) 500.dp else 60.dp)
-                        .clickable(
-                            indication = null,
-                            interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
-                        ) {
-                            isSearchActive = false
-                            viewModel.setSearchQuery("")
-                        }
-                )
-            }
-
             // Overlay Playlist Detail
             if (selectedPlaylist != null) {
                 PlaylistDetailScreen(
@@ -971,16 +868,7 @@ fun MainScreen(viewModel: PlayerViewModel) {
                 }
             }
 
-            // Keep the mini player pinned to the bottom everywhere: on top of playlist / artist pages
-            // (classic layout, where the bottom bar is covered), and on every page of the swipe layout
-            // except the player page itself.
-            val isDetailOverlayOpen = selectedPlaylist != null || selectedMuesoPlaylist != null ||
-                selectedOnlinePlaylist != null || selectedArtistPage != null
-            val showBottomMiniPlayer = currentTrack != null && if (isClassic) {
-                !isClassicPlayerExpanded
-            } else {
-                isDetailOverlayOpen || pagerState.currentPage != 1
-            }
+            val showBottomMiniPlayer = currentTrack != null && !isClassicPlayerExpanded && !isSearchActive
             run {
                 androidx.compose.animation.AnimatedVisibility(
                     visible = showBottomMiniPlayer,
@@ -1016,6 +904,47 @@ fun MainScreen(viewModel: PlayerViewModel) {
                     )
                 }
             }
+
+            // Full-screen Classic Player Expansion (Animates directly into/from floating mini player)
+            androidx.compose.animation.AnimatedVisibility(
+                visible = isClassicPlayerExpanded && currentTrack != null,
+                modifier = Modifier.fillMaxSize(),
+                enter = androidx.compose.animation.slideInVertically(
+                    initialOffsetY = { (it * 0.80f).toInt() },
+                    animationSpec = androidx.compose.animation.core.spring(
+                        dampingRatio = 0.85f,
+                        stiffness = 400f
+                    )
+                ) + androidx.compose.animation.scaleIn(
+                    initialScale = 0.40f,
+                    transformOrigin = TransformOrigin(0.5f, 0.90f),
+                    animationSpec = androidx.compose.animation.core.spring(
+                        dampingRatio = 0.85f,
+                        stiffness = 400f
+                    )
+                ) + androidx.compose.animation.fadeIn(androidx.compose.animation.core.tween(200)),
+                exit = androidx.compose.animation.slideOutVertically(
+                    targetOffsetY = { (it * 0.80f).toInt() },
+                    animationSpec = androidx.compose.animation.core.tween(260, easing = FastOutSlowInEasing)
+                ) + androidx.compose.animation.scaleOut(
+                    targetScale = 0.40f,
+                    transformOrigin = TransformOrigin(0.5f, 0.90f),
+                    animationSpec = androidx.compose.animation.core.tween(260, easing = FastOutSlowInEasing)
+                ) + androidx.compose.animation.fadeOut(androidx.compose.animation.core.tween(220))
+            ) {
+                if (currentTrack != null) {
+                    ClassicPlayerScreen(
+                        track = currentTrack,
+                        viewModel = viewModel,
+                        onCollapseClick = returnFromPlayer,
+                        onNavigateAway = {
+                            clearPlayerReturn()
+                            isClassicPlayerExpanded = false
+                        }
+                    )
+                }
+            }
+
 
             // Add to Playlist Bottom Sheet (YouTube, Online, Local)
             if (selectedTrackForPlaylist != null) {
@@ -1092,215 +1021,60 @@ fun MainScreen(viewModel: PlayerViewModel) {
     }
 }
 
-// ─── Top Navigation Bar ──────────────────────────────────────
+private enum class BrowsePage { Library, Offline, Explore }
 
 @Composable
-fun TopNavigationBarWithSearch(
-    isOnlineActive: Boolean,
-    isSearchActive: Boolean,
+private fun SearchBar(
     searchQuery: String,
-    isDarkMode: Boolean = true,
-    currentPage: Int = 1,
-    hasTrackPlaying: Boolean = false,
-    onSearchClick: () -> Unit,
-    onSearchClose: () -> Unit,
-    onQueryChange: (String) -> Unit,
-    onSettingsClick: () -> Unit = {},
-    googleAccount: com.google.android.gms.auth.api.signin.GoogleSignInAccount? = null,
-    modifier: Modifier = Modifier
+    isDarkMode: Boolean,
+    onClose: () -> Unit,
+    onQueryChange: (String) -> Unit
 ) {
     val focusRequester = remember { FocusRequester() }
-    val isPage1 = currentPage == 1
-    val isPage1NoTrackLightMode = isPage1 && !isDarkMode && !hasTrackPlaying
-
-    val textColor = when {
-        isPage1NoTrackLightMode -> Color(0xFF1D1D1F)
-        isPage1 -> Color.White
-        isDarkMode -> Color.White
-        else -> Color(0xFF1D1D1F)
-    }
-    val textSub = when {
-        isPage1NoTrackLightMode -> Color.Black.copy(alpha = 0.5f)
-        isPage1 -> Color.White.copy(alpha = 0.6f)
-        isDarkMode -> Color.White.copy(alpha = 0.4f)
-        else -> Color.Black.copy(alpha = 0.4f)
-    }
-    val searchBg = when {
-        isPage1NoTrackLightMode -> Color.Black.copy(alpha = 0.05f)
-        isPage1 -> Color.White.copy(alpha = 0.2f)
-        isDarkMode -> Color.White.copy(alpha = 0.1f)
-        else -> Color.Black.copy(alpha = 0.05f)
-    }
-
-    LaunchedEffect(isSearchActive) {
-        if (isSearchActive) {
-            try { focusRequester.requestFocus() } catch (_: Exception) {}
-        }
-    }
-
-    val topBarBg = if (isDarkMode) BgDark else Color.White
+    val textColor = if (isDarkMode) Color.White else Color(0xFF1D1D1F)
+    val textSub = textColor.copy(alpha = 0.6f)
+    LaunchedEffect(Unit) { focusRequester.requestFocus() }
 
     Row(
-        modifier = modifier
+        modifier = Modifier
             .fillMaxWidth()
-            .then(
-                if (isPage1) Modifier
-                else Modifier.background(
-                    brush = androidx.compose.ui.graphics.Brush.verticalGradient(
-                        colors = listOf(
-                            topBarBg,
-                            topBarBg.copy(alpha = 0.8f),
-                            Color.Transparent
-                        )
-                    )
-                )
-            )
             .statusBarsPadding()
-            .padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 8.dp),
+            .height(60.dp)
+            .padding(horizontal = 16.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // Use a Box with weight(1f) so the layout size stays fixed during animation
-        Box(
-            modifier = Modifier.weight(1f),
-            contentAlignment = Alignment.CenterEnd
+        Row(
+            modifier = Modifier
+                .weight(1f)
+                .clip(RoundedCornerShape(16.dp))
+                .background(textColor.copy(alpha = 0.08f))
+                .padding(start = 14.dp, end = 4.dp, top = 4.dp, bottom = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            // Left: App Symbol & Mueso Name (hide when search is active)
-            androidx.compose.animation.AnimatedVisibility(
-                visible = !isSearchActive,
-                enter = fadeIn(tween(200)),
-                exit = fadeOut(tween(150)),
-                modifier = Modifier.align(Alignment.CenterStart)
-            ) {
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier
-                        .padding(start = 8.dp)
-                        .clip(RoundedCornerShape(8.dp))
-                        .clickable { onSettingsClick() }
-                        .padding(4.dp)
-                ) {
-                    if (googleAccount?.photoUrl != null) {
-                        coil.compose.AsyncImage(
-                            model = googleAccount.photoUrl,
-                            contentDescription = "Settings & Profile",
-                            modifier = Modifier
-                                .size(36.dp)
-                                .clip(androidx.compose.foundation.shape.CircleShape)
-                        )
-                    } else {
-                        Icon(
-                            imageVector = Icons.Default.Settings,
-                            contentDescription = "Settings",
-                            tint = if (isPage1NoTrackLightMode) Color(0xFF1D1D1F) else AccentOrange,
-                            modifier = Modifier.size(36.dp)
-                        )
+            Icon(Icons.Default.Search, contentDescription = null, tint = textSub)
+            BasicTextField(
+                value = searchQuery,
+                onValueChange = onQueryChange,
+                textStyle = TextStyle(color = textColor, fontSize = 16.sp),
+                singleLine = true,
+                cursorBrush = SolidColor(AccentOrange),
+                modifier = Modifier.weight(1f).focusRequester(focusRequester),
+                decorationBox = { innerTextField ->
+                    Box {
+                        if (searchQuery.isEmpty()) Text("Search songs…", color = textSub, fontSize = 16.sp)
+                        innerTextField()
                     }
-                    Text(
-                        text = "Mueso",
-                        color = textColor,
-                        fontWeight = FontWeight.ExtraBold,
-                        fontSize = 22.sp,
-                        letterSpacing = (-0.5).sp
-                    )
                 }
-            }
-
-            // Right: Search bar
-            androidx.compose.animation.AnimatedVisibility(
-                visible = isSearchActive,
-                enter = expandHorizontally(
-                    animationSpec = tween(300),
-                    expandFrom = Alignment.End
-                ) + fadeIn(tween(200)),
-                exit = shrinkHorizontally(
-                    animationSpec = tween(250),
-                    shrinkTowards = Alignment.End
-                ) + fadeOut(tween(150)),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(16.dp))
-                        .background(searchBg)
-                        .padding(horizontal = 14.dp, vertical = 10.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                Icon(
-                    Icons.Default.Search,
-                    contentDescription = null,
-                    tint = textSub,
-                    modifier = Modifier.size(20.dp)
-                )
-                BasicTextField(
-                    value = searchQuery,
-                    onValueChange = onQueryChange,
-                    textStyle = TextStyle(
-                        color = textColor,
-                        fontSize = 16.sp
-                    ),
-                    singleLine = true,
-                    cursorBrush = SolidColor(AccentOrange),
-                    modifier = Modifier
-                        .weight(1f)
-                        .focusRequester(focusRequester),
-                    decorationBox = { innerTextField ->
-                        Box {
-                            if (searchQuery.isEmpty()) {
-                                Text(
-                                    "Search songs...",
-                                    color = textSub,
-                                    fontSize = 16.sp
-                                )
-                            }
-                            innerTextField()
-                        }
-                    }
-                )
-                if (searchQuery.isNotEmpty()) {
-                    Icon(
-                        Icons.Default.Close,
-                        contentDescription = "Clear",
-                        tint = textSub,
-                        modifier = Modifier
-                            .size(20.dp)
-                            .clickable { onQueryChange("") }
-                    )
+            )
+            if (searchQuery.isNotEmpty()) {
+                IconButton(onClick = { onQueryChange("") }) {
+                    Icon(Icons.Default.Close, contentDescription = "Clear search", tint = textSub)
                 }
-            }
-        } // End AnimatedVisibility
-        } // End Box
-
-        // Action buttons: Settings & Search/Close toggle
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            // Empty space for layout balance if needed, or just Search
-
-            IconButton(
-                onClick = {
-                    if (isSearchActive) onSearchClose() else onSearchClick()
-                }
-            ) {
-                Icon(
-                    imageVector = if (isSearchActive) Icons.Default.Close else Icons.Default.Search,
-                    contentDescription = "Search",
-                    tint = textColor
-                )
             }
         }
-    }
-}
-
-@Composable
-fun PlaceholderScreen(title: String) {
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
-            .padding(horizontal = 32.dp),
-        contentAlignment = Alignment.CenterStart
-    ) {
-        Text(title, color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f), style = MaterialTheme.typography.headlineMedium)
+        IconButton(onClick = onClose) {
+            Icon(Icons.Default.Close, contentDescription = "Close search", tint = textColor)
+        }
     }
 }

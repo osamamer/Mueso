@@ -26,6 +26,7 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -40,6 +41,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -98,6 +100,8 @@ fun HomeScreen(
     viewModel: PlayerViewModel,
     googlePhotoUrl: String?,
     onOpenLibrary: () -> Unit,
+    onOpenOffline: () -> Unit,
+    onOpenExplore: () -> Unit,
     onOpenSettings: () -> Unit,
     onSearchClick: () -> Unit,
     onPlaylistClick: (PlaylistEntity) -> Unit,
@@ -136,6 +140,7 @@ fun HomeScreen(
         ).take(8)
     }
     val jumpBackIn = remember(filtered) { filtered.sortedByDescending { it.recency }.take(12) }
+    val playlistColumns = (LocalConfiguration.current.screenWidthDp / 200).coerceIn(2, 4)
     val showFilters = onlinePlaylists.isNotEmpty() && playlists.isNotEmpty()
 
     val open: (HomePlaylist) -> Unit = { item ->
@@ -181,6 +186,24 @@ fun HomeScreen(
             }
         }
 
+        item(key = "browse") {
+            LazyRow(
+                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                item {
+                    OutlinedButton(onClick = onSearchClick) {
+                        Icon(Icons.Default.Search, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text("Search")
+                    }
+                }
+                item { OutlinedButton(onClick = onOpenLibrary) { Text("Library") } }
+                item { OutlinedButton(onClick = onOpenOffline) { Text("Offline") } }
+                item { OutlinedButton(onClick = onOpenExplore) { Text("Explore") } }
+            }
+        }
+
         if (showFilters) {
             item(key = "filters") {
                 Row(
@@ -219,11 +242,11 @@ fun HomeScreen(
                 ) {
                     Text("No playlists yet", color = textPrimary, fontSize = 17.sp, fontWeight = FontWeight.Bold)
                     Spacer(Modifier.height(4.dp))
-                    Text("Tap your profile picture to open your library and create one.", color = textSecondary, fontSize = 13.sp)
+                    Text("Create or import a playlist in your library.", color = textSecondary, fontSize = 13.sp)
                 }
             }
         } else {
-            items(quickAccess.chunked(2), key = { row -> row.joinToString("|") { it.key } }) { row ->
+            items(quickAccess.chunked(playlistColumns), key = { row -> row.joinToString("|") { it.key } }) { row ->
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -241,36 +264,8 @@ fun HomeScreen(
                             modifier = Modifier.weight(1f)
                         )
                     }
-                    if (row.size == 1) Spacer(Modifier.weight(1f))
+                    repeat(playlistColumns - row.size) { Spacer(Modifier.weight(1f)) }
                 }
-            }
-        }
-
-        // ── Search, right below the playlists ──
-        item(key = "search") {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 16.dp)
-                    .clip(RoundedCornerShape(10.dp))
-                    .background(if (isDarkMode) Color.White else Color.Black.copy(alpha = 0.06f))
-                    .clickable(onClick = onSearchClick)
-                    .padding(horizontal = 14.dp, vertical = 13.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Icon(
-                    Icons.Default.Search,
-                    contentDescription = null,
-                    tint = Color(0xFF121212),
-                    modifier = Modifier.size(24.dp)
-                )
-                Spacer(Modifier.width(12.dp))
-                Text(
-                    "What do you want to listen to?",
-                    color = Color(0xFF121212).copy(alpha = 0.75f),
-                    fontSize = 15.sp,
-                    fontWeight = FontWeight.SemiBold
-                )
             }
         }
 

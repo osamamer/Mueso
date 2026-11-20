@@ -12,7 +12,17 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.only
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.*
+import androidx.compose.ui.Modifier
 import androidx.lifecycle.ViewModelProvider
 import com.akshay.musicplayer.data.repository.TrackRepositoryImpl
 import com.akshay.musicplayer.data.sources.LocalMediaStoreDataSource
@@ -144,54 +154,61 @@ class MainActivity : ComponentActivity() {
                 cornerRadiusOption = cornerRadiusOption,
                 lyricsFontSizeOption = lyricsFontSizeOption
             ) {
-                var showSplash by remember { mutableStateOf(!LightProfiles.isLight) }
+                Box(
+                    Modifier
+                        .fillMaxSize()
+                        .background(MaterialTheme.colorScheme.background)
+                        .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal))
+                ) {
+                    var showSplash by remember { mutableStateOf(!LightProfiles.isLight) }
 
-                if (LightProfiles.isLight) {
-                    LightProfileContent()
-                } else if (showSplash) {
-                    SplashScreen(
-                        onAnimationFinished = {
-                            showSplash = false
-                            if (hasCompletedOnboarding) {
-                                playerViewModel.restoreLastPlaybackStateOrOffline(context)
-                            }
-                        }
-                    )
-                } else {
-                    AnimatedContent(
-                        targetState = hasCompletedOnboarding,
-                        transitionSpec = {
-                            (fadeIn(animationSpec = tween(350, easing = FastOutSlowInEasing)) +
-                             slideInHorizontally(
-                                 initialOffsetX = { fullWidth -> fullWidth / 4 },
-                                 animationSpec = tween(350, easing = FastOutSlowInEasing)
-                             ))
-                             .togetherWith(
-                                 fadeOut(animationSpec = tween(250, easing = FastOutSlowInEasing)) +
-                                 slideOutHorizontally(
-                                     targetOffsetX = { fullWidth -> -fullWidth / 4 },
-                                     animationSpec = tween(250, easing = FastOutSlowInEasing)
-                                 )
-                             )
-                        },
-                        label = "WelcomeToMainTransition"
-                    ) { onboarded ->
-                        if (!onboarded) {
-                            WelcomeScreen(
-                                viewModel = playerViewModel,
-                                isDarkMode = isEffectiveDark,
-                                onContinue = {
-                                    muesoPrefs.edit()
-                                        .putBoolean("has_completed_welcome_onboarding", true)
-                                        .putBoolean("has_prompted_battery_optimization", true)
-                                        .putBoolean("has_seen_google_onboarding", true)
-                                        .apply()
-                                    hasCompletedOnboarding = true
+                    if (LightProfiles.isLight) {
+                        LightProfileContent()
+                    } else if (showSplash) {
+                        SplashScreen(
+                            onAnimationFinished = {
+                                showSplash = false
+                                if (hasCompletedOnboarding) {
                                     playerViewModel.restoreLastPlaybackStateOrOffline(context)
                                 }
-                            )
-                        } else {
-                            MainScreen(viewModel = playerViewModel)
+                            }
+                        )
+                    } else {
+                        AnimatedContent(
+                            targetState = hasCompletedOnboarding,
+                            transitionSpec = {
+                                (fadeIn(animationSpec = tween(350, easing = FastOutSlowInEasing)) +
+                                 slideInHorizontally(
+                                     initialOffsetX = { fullWidth -> fullWidth / 4 },
+                                     animationSpec = tween(350, easing = FastOutSlowInEasing)
+                                 ))
+                                 .togetherWith(
+                                     fadeOut(animationSpec = tween(250, easing = FastOutSlowInEasing)) +
+                                     slideOutHorizontally(
+                                         targetOffsetX = { fullWidth -> -fullWidth / 4 },
+                                         animationSpec = tween(250, easing = FastOutSlowInEasing)
+                                     )
+                                 )
+                            },
+                            label = "WelcomeToMainTransition"
+                        ) { onboarded ->
+                            if (!onboarded) {
+                                WelcomeScreen(
+                                    viewModel = playerViewModel,
+                                    isDarkMode = isEffectiveDark,
+                                    onContinue = {
+                                        muesoPrefs.edit()
+                                            .putBoolean("has_completed_welcome_onboarding", true)
+                                            .putBoolean("has_prompted_battery_optimization", true)
+                                            .putBoolean("has_seen_google_onboarding", true)
+                                            .apply()
+                                        hasCompletedOnboarding = true
+                                        playerViewModel.restoreLastPlaybackStateOrOffline(context)
+                                    }
+                                )
+                            } else {
+                                MainScreen(viewModel = playerViewModel)
+                            }
                         }
                     }
                 }

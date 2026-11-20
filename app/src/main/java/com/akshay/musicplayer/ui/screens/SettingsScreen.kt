@@ -101,7 +101,6 @@ fun SettingsScreen(
     val enableLyrics by viewModel.enableLyrics.collectAsState()
     val preferredLanguage by viewModel.preferredLanguage.collectAsState()
 
-    val playButtonPosition by viewModel.playButtonPosition.collectAsState()
     var showPreBuildOption by remember { mutableStateOf(false) }
     val enableSponsorBlock by viewModel.enableSponsorBlock.collectAsState()
     val skipSponsor by viewModel.skipSponsor.collectAsState()
@@ -118,7 +117,6 @@ fun SettingsScreen(
     val isBitPerfectEnabled by viewModel.isBitPerfectEnabled.collectAsState()
     val crossfadeEnabled by viewModel.crossfadeEnabled.collectAsState()
     val crossfadeSeconds by viewModel.crossfadeSeconds.collectAsState()
-    val playerLayoutStyle by viewModel.playerLayoutStyle.collectAsState()
 
     var showSpotifyImport by remember { mutableStateOf(false) }
     var showAboutPage by remember { mutableStateOf(false) }
@@ -292,22 +290,6 @@ fun SettingsScreen(
                         )
                         HorizontalDivider(color = dividerColor)
                         SettingsSelectorItem(
-                            title = "Player Layout Style",
-                            subtitle = "Switch between Reels swiper and Classic album player",
-                            icon = Icons.Default.ViewCarousel,
-                            currentValue = if (playerLayoutStyle == "classic") "Classic Player" else "Reels Swiper",
-                            options = listOf("Reels Swiper", "Classic Player"),
-                            isDarkMode = isDarkMode,
-                            accentColor = accentColor,
-                            onSelect = {
-                                val target = if (it.startsWith("Classic")) "classic" else "reels"
-                                if (target != playerLayoutStyle) {
-                                    viewModel.setPlayerLayoutStyle(target)
-                                }
-                            }
-                        )
-                        HorizontalDivider(color = dividerColor)
-                        SettingsSelectorItem(
                             title = "Interface Text Scaling",
                             subtitle = "Adjust application text size",
                             icon = Icons.Default.FormatSize,
@@ -408,17 +390,6 @@ fun SettingsScreen(
                             isDarkMode = isDarkMode,
                             accentColor = accentColor,
                             onCheckedChange = { viewModel.setHighRefreshRate(it) }
-                        )
-                        HorizontalDivider(color = dividerColor)
-                        SettingsSelectorItem(
-                            title = "Play Button Position",
-                            subtitle = "Placement of playback control button",
-                            icon = Icons.Default.PlayCircle,
-                            currentValue = playButtonPosition,
-                            options = listOf("Left", "Right", "Center"),
-                            isDarkMode = isDarkMode,
-                            accentColor = accentColor,
-                            onSelect = { viewModel.setPlayButtonPosition(it) }
                         )
                     }
                 }
@@ -1956,8 +1927,6 @@ private fun SettingsSelectorItem(
                 ) {
                     options.forEach { option ->
                         val isSelected = option.equals(currentValue, ignoreCase = true) ||
-                            (option.contains("Classic", ignoreCase = true) && currentValue.contains("Classic", ignoreCase = true)) ||
-                            (option.contains("Reels", ignoreCase = true) && currentValue.contains("Reels", ignoreCase = true)) ||
                             (option.contains("FLAC", ignoreCase = true) && currentValue.contains("FLAC", ignoreCase = true)) ||
                             (option.contains("320") && currentValue.contains("320")) ||
                             (option.contains("256") && currentValue.contains("256")) ||

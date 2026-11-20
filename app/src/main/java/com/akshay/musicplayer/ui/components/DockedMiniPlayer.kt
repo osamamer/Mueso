@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -43,6 +44,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -69,6 +71,11 @@ fun DockedMiniPlayer(
 ) {
     if (track == null) return
 
+    val configuration = LocalConfiguration.current
+    val isWide = configuration.screenWidthDp >= 360 &&
+        configuration.screenWidthDp > configuration.screenHeightDp
+    val skipButtonSize = if (isWide) 48.dp else 34.dp
+    val playButtonSize = if (isWide) 52.dp else 38.dp
     val context = LocalContext.current
     val accent = LocalAccentColor.current
     val isPureBlack = LocalIsPureBlack.current
@@ -89,6 +96,7 @@ fun DockedMiniPlayer(
     val latestNext by rememberUpdatedState(onNextClick)
     val latestPrevious by rememberUpdatedState(onPreviousClick)
     val boxModifier = modifier
+        .widthIn(max = 760.dp)
         .fillMaxWidth()
         .padding(horizontal = 14.dp, vertical = 4.dp)
         .shadow(
@@ -234,7 +242,7 @@ fun DockedMiniPlayer(
                 ) {
                     IconButton(
                         onClick = onPreviousClick,
-                        modifier = Modifier.size(34.dp)
+                        modifier = Modifier.size(skipButtonSize)
                     ) {
                         Icon(
                             imageVector = Icons.Default.SkipPrevious,
@@ -247,7 +255,7 @@ fun DockedMiniPlayer(
                     IconButton(
                         onClick = onPlayPauseClick,
                         modifier = Modifier
-                            .size(38.dp)
+                            .size(playButtonSize)
                             .clip(CircleShape)
                             .background(accent.copy(alpha = 0.15f))
                     ) {
@@ -269,7 +277,7 @@ fun DockedMiniPlayer(
 
                     IconButton(
                         onClick = onNextClick,
-                        modifier = Modifier.size(34.dp)
+                        modifier = Modifier.size(skipButtonSize)
                     ) {
                         Icon(
                             imageVector = Icons.Default.SkipNext,

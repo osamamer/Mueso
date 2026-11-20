@@ -16,6 +16,10 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -132,14 +136,16 @@ private fun PlaylistList(
     onOpen: (LightPlaylist) -> Unit
 ) {
     val colors = MaterialTheme.colorScheme
-    LazyColumn(
+    LazyVerticalGrid(
+        columns = GridCells.Adaptive(minSize = 240.dp),
         modifier = Modifier
             .fillMaxSize()
             .statusBarsPadding(),
         contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 24.dp, bottom = 120.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp)
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        item {
+        item(span = { GridItemSpan(maxLineSpan) }) {
             Text(
                 LightProfiles.displayName(LightProfiles.current.orEmpty()),
                 color = colors.onBackground,
@@ -156,7 +162,7 @@ private fun PlaylistList(
             Text(note, color = colors.onBackground.copy(alpha = 0.6f), fontSize = 13.sp)
             Spacer(Modifier.height(12.dp))
         }
-        itemsIndexed(playlists, key = { _, playlist -> playlist.key }) { _, playlist ->
+        items(playlists, key = { it.key }) { playlist ->
             Row(
                 modifier = Modifier
                     .fillMaxWidth()

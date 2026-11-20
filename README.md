@@ -29,7 +29,15 @@
 > And yes, This is my primary Music player 😅.
 
 > [!TIP]
-> **Creating or importing a playlist is recommended for the best experience!** Import your favorite Spotify playlists or sync your YouTube Music account to enjoy seamless queue management and reels-style vertical playback.
+> **Creating or importing a playlist is recommended for the best experience!** Import your favorite Spotify playlists or sync your YouTube Music account to play and queue your favorite tracks.
+
+---
+
+## Android head units
+
+For a head unit that installs Android apps directly, use the full universal Mueso APK. Open Mueso on the head unit and tap a track or the mini player to open Now Playing. The wide layout activates automatically. The Offline shortcut opens device music and saved playlists.
+
+Phone projection through Android Auto uses a separate host interface. This APK provides Mueso's own interface for direct installation.
 
 ---
 
@@ -38,10 +46,6 @@
 <div align="center">
   <table>
     <tr valign="top">
-      <td align="center" valign="top" width="25%">
-        <img src="previews/mainPlayerScreen.jpg" alt="Reels-Style Vertical Player" width="100%" /><br />
-        <sub><b>Reels-Style Player</b></sub>
-      </td>
       <td align="center" valign="top" width="25%">
         <img src="previews/searchLyricsScreen.jpg" alt="Manual Lyrics Search" width="100%" /><br />
         <sub><b>Search & Pick Lyrics</b></sub>
@@ -80,9 +84,8 @@
 
 ## ✨ Features
 
-- **📱 Reels-Style Vertical Swipe Player**: Modern fullscreen Vertical Pager layout for smooth swipe-up/down gestures to transition between tracks like reels, complete with dynamic background artwork blur, animated playback controls, and quick lyrics view (101% inspired by the legendary Resso app).
-- **📻 Classic Player & Floating Mini Player**: Switch anytime between the immersive reels player and a classic player layout featuring an animated floating mini-player capsule with gesture controls.
-- **🖼️ Interactive Player Background Framing**: Long-press and drag sideways on the fullscreen player background to custom-frame and position album art. Customized positions are persisted and synced per playlist track.
+- **📻 Player & Floating Mini Player**: A full player with album artwork, playback controls, lyrics, and the queue, plus a floating mini player while browsing.
+- **🚘 Landscape playback**: Wide Android screens show artwork beside large playback controls. Home provides direct shortcuts to Search, Library, Offline, and Explore.
 - **🎨 Dynamic Theming & Pure Black AMOLED**: Pitch-black pure AMOLED dark mode for OLED battery savings, light mode, vibrant multi-shade accent color palettes, dynamic font scaling, and adjustable card corner radius.
 - **⚡ Native InnerTube Engine & YouTube Music Personalization**: Zero-overhead native Kotlin InnerTube client for ultra-fast streaming and account synchronization. Connect your YouTube Music account to stream your personalized library, custom playlists, and recommendations without third-party dependencies.
 - **🎤 Dedicated Artist Detail Pages**: Full-featured artist exploration screen featuring artist banner, subscriber count, bio, and organized sections for **Top Songs**, **Albums**, **Singles & EPs**, **Music Videos**, **Live Performances**, **Featured On**, and **Similar Artists**, plus instant **Radio** and **Shuffle** launch buttons.
@@ -166,7 +169,7 @@ cd Mueso
 
 Mueso is built on top of amazing open-source technologies, community APIs, and great product inspirations:
 
-- **[Resso](https://en.wikipedia.org/wiki/Resso) (by ByteDance)** - The core UI & UX inspiration for Mueso's reels-style vertical music player. A phenomenal, ahead-of-its-time music experience (now discontinued) that 101% inspired Mueso's entire fullscreen swipe-up listening flow.
+- **[Resso](https://en.wikipedia.org/wiki/Resso) (by ByteDance)** - Inspiration for Mueso’s original playback interface.
 - **[Zuno](https://github.com/noFAYZ/zuno)** - Open-source desktop YouTube Music client by [@noFAYZ](https://github.com/noFAYZ); foundational inspiration and reference for multi-client stream resolving strategies (iOS, Android, TV, Web Remix) and player options.
 - **[SponsorBlock API](https://sponsor.ajay.app/)** - Crowd-sourced database for skipping non-music segments and sponsorships.
 - **[android-youtube-player](https://github.com/PierfrancescoSoffritti/android-youtube-player)** - YouTube IFrame player wrapper by Pierfrancesco Soffritti.
