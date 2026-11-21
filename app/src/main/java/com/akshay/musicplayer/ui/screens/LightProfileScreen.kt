@@ -146,21 +146,22 @@ private fun PlaylistList(
         horizontalArrangement = Arrangement.spacedBy(10.dp)
     ) {
         item(span = { GridItemSpan(maxLineSpan) }) {
-            Text(
-                LightProfiles.displayName(LightProfiles.current.orEmpty()),
-                color = colors.onBackground,
-                fontSize = 28.sp,
-                fontWeight = FontWeight.Bold
-            )
-            Spacer(Modifier.height(4.dp))
-            val note = when {
-                isSyncing -> "Fetching your playlists from Nuclear…"
-                syncFailed -> "Couldn't reach the full Nuclear app. Showing the playlists from last time."
-                playlists.isEmpty() -> "No playlists yet. Choose some in Nuclear → Settings → Light profiles."
-                else -> "Only the playlists chosen for this profile."
+            Column(modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp)) {
+                Text(
+                    LightProfiles.displayName(LightProfiles.current.orEmpty()),
+                    color = colors.onBackground,
+                    fontSize = 28.sp,
+                    fontWeight = FontWeight.Bold
+                )
+                Spacer(Modifier.height(4.dp))
+                val note = when {
+                    isSyncing -> "Fetching your playlists from Nuclear…"
+                    syncFailed -> "Couldn't reach the full Nuclear app. Showing the playlists from last time."
+                    playlists.isEmpty() -> "No playlists yet. Choose some in Nuclear → Settings → Light profiles."
+                    else -> "Only the playlists chosen for this profile."
+                }
+                Text(note, color = colors.onBackground.copy(alpha = 0.6f), fontSize = 13.sp)
             }
-            Text(note, color = colors.onBackground.copy(alpha = 0.6f), fontSize = 13.sp)
-            Spacer(Modifier.height(12.dp))
         }
         items(playlists, key = { it.key }) { playlist ->
             Row(
