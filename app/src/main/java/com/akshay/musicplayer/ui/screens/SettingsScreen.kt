@@ -738,26 +738,57 @@ fun SettingsScreen(
                         HorizontalDivider(color = dividerColor)
 
                         // Local Playlists (JSON)
+                        var showImportFromLink by remember { mutableStateOf(false) }
+                        val importPlaylistJson: suspend (String?) -> Unit = { content ->
+                            if (!content.isNullOrBlank()) {
+                                val success = viewModel.importPlaylistsFromJson(context, content)
+                                if (success) {
+                                    android.widget.Toast.makeText(context, "Playlists imported successfully!", android.widget.Toast.LENGTH_SHORT).show()
+                                } else {
+                                    android.widget.Toast.makeText(context, "Invalid JSON playlist format", android.widget.Toast.LENGTH_SHORT).show()
+                                }
+                            }
+                        }
                         val jsonPickerLauncher = rememberLauncherForActivityResult(
-                            contract = ActivityResultContracts.GetContent()
-                        ) { uri ->
-                            if (uri != null) {
+                            contract = ActivityResultContracts.StartActivityForResult()
+                        ) { result ->
+                            val uri = result.data?.data
+                            if (result.resultCode == android.app.Activity.RESULT_OK && uri != null) {
                                 coroutineScope.launch {
                                     try {
-                                        val content = context.contentResolver.openInputStream(uri)?.use { it.bufferedReader().readText() }
-                                        if (!content.isNullOrBlank()) {
-                                            val success = viewModel.importPlaylistsFromJson(context, content)
-                                            if (success) {
-                                                android.widget.Toast.makeText(context, "Playlists imported successfully!", android.widget.Toast.LENGTH_SHORT).show()
-                                            } else {
-                                                android.widget.Toast.makeText(context, "Invalid JSON playlist format", android.widget.Toast.LENGTH_SHORT).show()
-                                            }
+                                        val content = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                                            context.contentResolver.openInputStream(uri)?.use { it.bufferedReader().readText() }
                                         }
+                                        importPlaylistJson(content)
                                     } catch (_: Exception) {
                                         android.widget.Toast.makeText(context, "Failed to read file", android.widget.Toast.LENGTH_SHORT).show()
                                     }
                                 }
                             }
+                        }
+                        // Gallery apps (e.g. QuickPic on car head units) can claim the generic
+                        // "get content" picker and only show images, so open Android's own
+                        // document picker directly. Without one, fall back to importing from a link.
+                        val launchPlaylistPicker = {
+                            val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+                                addCategory(Intent.CATEGORY_OPENABLE)
+                                type = "*/*"
+                            }
+                            context.packageManager.queryIntentActivities(intent, 0)
+                                .firstOrNull { it.activityInfo.packageName.contains("documentsui") }
+                                ?.let { intent.setClassName(it.activityInfo.packageName, it.activityInfo.name) }
+                            try {
+                                jsonPickerLauncher.launch(intent)
+                            } catch (_: android.content.ActivityNotFoundException) {
+                                showImportFromLink = true
+                            }
+                        }
+
+                        if (showImportFromLink) {
+                            ImportPlaylistsFromLinkDialog(
+                                onDismiss = { showImportFromLink = false },
+                                onImport = { content -> importPlaylistJson(content) }
+                            )
                         }
 
                         Row(
@@ -796,11 +827,18 @@ fun SettingsScreen(
                                     Text("Export", color = textPrimary, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
                                 }
                                 OutlinedButton(
-                                    onClick = { jsonPickerLauncher.launch("*/*") },
+                                    onClick = launchPlaylistPicker,
                                     shape = RoundedCornerShape(8.dp),
                                     contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
                                 ) {
                                     Text("Import", color = textPrimary, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                                }
+                                OutlinedButton(
+                                    onClick = { showImportFromLink = true },
+                                    shape = RoundedCornerShape(8.dp),
+                                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
+                                ) {
+                                    Text("Link", color = textPrimary, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
                                 }
                             }
                         }
@@ -2727,4 +2765,78 @@ private fun SettingsPermissionItem(
             )
         }
     }
+}
+
+
+@Composable
+private fun ImportPlaylistsFromLinkDialog(
+    onDismiss: () -> Unit,
+    onImport: suspend (String) -> Unit
+) {
+    val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
+    var link by remember { mutableStateOf("") }
+    var isLoading by remember { mutableStateOf(false) }
+    var error by remember { mutableStateOf<String?>(null) }
+
+    AlertDialog(
+        onDismissRequest = { if (!isLoading) onDismiss() },
+        title = { Text("Import playlists from link") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    "Paste the address of a playlist backup, e.g. http://192.168.1.10:8000/playlists.txt",
+                    fontSize = 12.sp
+                )
+                OutlinedTextField(
+                    value = link,
+                    onValueChange = { link = it; error = null },
+                    singleLine = true,
+                    enabled = !isLoading,
+                    label = { Text("Link") },
+                    isError = error != null,
+                    supportingText = error?.let { { Text(it) } }
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(
+                enabled = link.isNotBlank() && !isLoading,
+                onClick = {
+                    val trimmed = link.trim()
+                    val url = if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) trimmed else "http://$trimmed"
+                    isLoading = true
+                    coroutineScope.launch {
+                        val content = try {
+                            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                                val conn = java.net.URL(url).openConnection() as java.net.HttpURLConnection
+                                conn.connectTimeout = 10_000
+                                conn.readTimeout = 60_000
+                                try {
+                                    if (conn.responseCode in 200..299) conn.inputStream.bufferedReader().use { it.readText() } else null
+                                } finally {
+                                    conn.disconnect()
+                                }
+                            }
+                        } catch (_: Exception) {
+                            null
+                        }
+                        if (content.isNullOrBlank()) {
+                            isLoading = false
+                            error = "Couldn't download that link"
+                        } else {
+                            onImport(content)
+                            isLoading = false
+                            onDismiss()
+                        }
+                    }
+                }
+            ) {
+                if (isLoading) CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp) else Text("Import")
+            }
+        },
+        dismissButton = {
+            TextButton(enabled = !isLoading, onClick = onDismiss) { Text("Cancel") }
+        }
+    )
 }
