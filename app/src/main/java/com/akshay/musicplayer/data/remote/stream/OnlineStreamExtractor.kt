@@ -274,7 +274,8 @@ object OnlineStreamExtractor {
                     waitCount++
                 }
 
-                withTimeoutOrNull(6000L) {
+                // Slow car head units (old WebView, weak CPU) need longer than 6s for BotGuard.
+                withTimeoutOrNull(15_000L) {
                     suspendCancellableCoroutine { continuation ->
                         pendingRequests[videoId] = continuation
                         continuation.invokeOnCancellation {
