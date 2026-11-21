@@ -535,6 +535,7 @@ class MusicPlayerService : MediaSessionService() {
                 }
             })
             .build()
+        activeSession = mediaSession
 
         MediaSessionBridge.onQueueOrCommandsChanged = {
             val session = mediaSession
@@ -636,10 +637,13 @@ class MusicPlayerService : MediaSessionService() {
             it.release()
         }
         mediaSession = null
+        activeSession = null
         super.onDestroy()
     }
 
     companion object {
+        /** The live session, for receivers that forward external commands (see CarMediaCommandReceiver). */
+        @Volatile var activeSession: MediaSession? = null
         private const val NOTIFICATION_CHANNEL_ID = "music_playback_channel_v3"
         private const val NOTIFICATION_ID = 1001
     }

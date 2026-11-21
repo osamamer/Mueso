@@ -33,6 +33,7 @@ class MusicPlayerApplication : Application() {
             if (isForegroundException) {
                 android.util.Log.w("MusicPlayerApp", "Caught and suppressed unhandled ForegroundServiceStartNotAllowedException to prevent crash: ${throwable.message}")
             } else {
+                CrashReport.save(this, throwable)
                 defaultHandler?.uncaughtException(thread, throwable)
             }
         }

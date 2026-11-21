@@ -197,6 +197,21 @@
             </intent-filter>
         </service>
 
+        <!-- Car head units often send steering-wheel buttons as legacy AOSP Music commands. -->
+        <receiver
+            android:name=".media.service.CarMediaCommandReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="com.android.music.musicservicecommand" />
+                <action android:name="com.android.music.musicservicecommand.next" />
+                <action android:name="com.android.music.musicservicecommand.previous" />
+                <action android:name="com.android.music.musicservicecommand.togglepause" />
+                <action android:name="com.android.music.musicservicecommand.pause" />
+                <action android:name="com.android.music.musicservicecommand.play" />
+                <action android:name="com.android.music.musicservicecommand.stop" />
+            </intent-filter>
+        </receiver>
+
         <!-- FileProvider for installing APK updates -->
         <provider
             android:name="androidx.core.content.FileProvider"

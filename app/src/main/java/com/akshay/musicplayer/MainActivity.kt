@@ -14,6 +14,10 @@ import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.getValue
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.fillMaxSize
@@ -158,6 +162,35 @@ class MainActivity : ComponentActivity() {
             ) {
                 val accent = LocalAccentColor.current
                 LaunchedEffect(accent) { updateLauncherIcon(applicationContext, accent) }
+                var lastCrash by androidx.compose.runtime.remember {
+                    androidx.compose.runtime.mutableStateOf(CrashReport.get(applicationContext))
+                }
+                lastCrash?.let { report ->
+                    val dismissCrash = {
+                        CrashReport.clear(applicationContext)
+                        lastCrash = null
+                    }
+                    androidx.compose.material3.AlertDialog(
+                        onDismissRequest = dismissCrash,
+                        title = { androidx.compose.material3.Text("Mueso crashed last time") },
+                        text = {
+                            androidx.compose.foundation.text.selection.SelectionContainer {
+                                androidx.compose.material3.Text(
+                                    report,
+                                    fontSize = androidx.compose.ui.unit.TextUnit(10f, androidx.compose.ui.unit.TextUnitType.Sp),
+                                    modifier = androidx.compose.ui.Modifier
+                                        .heightIn(max = androidx.compose.ui.unit.Dp(320f))
+                                        .verticalScroll(androidx.compose.foundation.rememberScrollState())
+                                )
+                            }
+                        },
+                        confirmButton = {
+                            androidx.compose.material3.TextButton(onClick = dismissCrash) {
+                                androidx.compose.material3.Text("Dismiss")
+                            }
+                        }
+                    )
+                }
 
                 Box(
                     Modifier
