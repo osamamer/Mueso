@@ -615,7 +615,6 @@ fun OnlinePlaylistsScreen(
                                             onClick = {
                                                 val trackEntities = shelf.tracks.map { it.toTrackEntity() }
                                                 viewModel.playOnlinePlaylist(trackEntities, index)
-                                                onNavigateToPlayer()
                                             }
                                         )
                                     }
@@ -740,7 +739,6 @@ fun OnlinePlaylistsScreen(
                                             onClick = {
                                                 val trackEntities = shelf.tracks.map { it.toTrackEntity() }
                                                 viewModel.playOnlinePlaylist(trackEntities, index)
-                                                onNavigateToPlayer()
                                             }
                                         )
                                     }
@@ -970,8 +968,6 @@ fun OnlinePlaylistsScreen(
                     },
                     onTrackClick = { index ->
                         viewModel.playOnlinePlaylist(playlistTracks, index, pl)
-                        selectedPlaylist = null
-                        onNavigateToPlayer()
                     },
                     onRemoveTrack = if (pl.isYouTubeUserPlaylist) { track ->
                         val vid = if (track.filePath.startsWith("online:")) track.filePath.removePrefix("online:")
@@ -1079,16 +1075,11 @@ fun OnlinePlaylistsScreen(
                     },
                     onTrackClick = { index: Int ->
                         viewModel.playOnlinePlaylist(tracks, index)
-                        selectedCustomPlaylist = null
-                        onNavigateToPlayer()
                     },
                     sortKey = "mueso_${custom.id}",
                     addedDates = addedDates,
                     onPlayTracks = { shown, index ->
-                        if (viewModel.playOnlinePlaylist(shown, index)) {
-                            selectedCustomPlaylist = null
-                            onNavigateToPlayer()
-                        }
+                        viewModel.playOnlinePlaylist(shown, index)
                     },
                     onRemoveTrack = { track: TrackEntity ->
                         viewModel.removeTrackFromOnlinePlaylist(custom.id, track.id)

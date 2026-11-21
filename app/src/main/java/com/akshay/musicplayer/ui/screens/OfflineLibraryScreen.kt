@@ -87,7 +87,6 @@ private val SurfaceDark: Color
 @Composable
 fun OfflineLibraryScreen(
     viewModel: PlayerViewModel,
-    onNavigateToPlayer: () -> Unit,
     onPlaylistClick: (PlaylistEntity) -> Unit,
     onOnlinePlaylistClick: (OnlinePlaylistEntity) -> Unit
 ) {
@@ -218,7 +217,6 @@ fun OfflineLibraryScreen(
                         },
                         onTrackClick = { list, index ->
                             viewModel.playQueue(list, index)
-                            onNavigateToPlayer()
                         },
                         onAddToPlaylist = { trackToAdd = it },
                         onRefresh = { viewModel.loadLocalTracks(forceReload = true) }

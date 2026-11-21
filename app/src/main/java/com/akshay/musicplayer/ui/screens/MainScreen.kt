@@ -274,7 +274,6 @@ fun MainScreen(viewModel: PlayerViewModel) {
             if (browsePage == BrowsePage.Offline) {
                 OfflineLibraryScreen(
                     viewModel = viewModel,
-                    onNavigateToPlayer = navigateToPlayer,
                     onPlaylistClick = { selectedPlaylist = it },
                     onOnlinePlaylistClick = { selectedMuesoPlaylist = it }
                 )
@@ -620,7 +619,6 @@ fun MainScreen(viewModel: PlayerViewModel) {
                                                     viewModel.playTrack(track)
                                                     isSearchActive = false
                                                     viewModel.setSearchQuery("")
-                                                    navigateToPlayer()
                                                 }
                                                 .padding(8.dp),
                                             verticalAlignment = Alignment.CenterVertically,
@@ -767,18 +765,14 @@ fun MainScreen(viewModel: PlayerViewModel) {
                         }
                     },
                     onTrackClick = { index ->
-                        if (viewModel.playOnlinePlaylist(playlistTracks, index)) {
-                            navigateToPlayerFromMuesoPlaylist()
-                        }
+                        viewModel.playOnlinePlaylist(playlistTracks, index)
                     },
                     onRemoveTrack = { track -> viewModel.removeTrackFromOnlinePlaylist(playlist.id, track.id) },
                     onMoveTrack = { fromIndex, toIndex -> viewModel.moveTrackInOnlinePlaylist(playlist.id, fromIndex, toIndex) },
                     sortKey = "mueso_${playlist.id}",
                     addedDates = playlistAddedDates,
                     onPlayTracks = { shown, index ->
-                        if (viewModel.playOnlinePlaylist(shown, index)) {
-                            navigateToPlayerFromMuesoPlaylist()
-                        }
+                        viewModel.playOnlinePlaylist(shown, index)
                     }
                 )
             }
@@ -860,9 +854,7 @@ fun MainScreen(viewModel: PlayerViewModel) {
                             }
                         },
                         onTrackClick = { idx ->
-                            if (viewModel.playOnlinePlaylist(playlistTracks, idx, pl)) {
-                                navigateToPlayerFromOnlinePlaylist(pl)
-                            }
+                            viewModel.playOnlinePlaylist(playlistTracks, idx, pl)
                         }
                     )
                 }

@@ -604,7 +604,7 @@ fun PlaylistDetailScreen(
                             dragOffsetY = if (isDragging) dragOffset else 0f,
                             onClick = {
                                 viewModel.touchPlaylist(playlist.id)
-                                if (viewModel.playQueue(filteredTracks, index)) onNavigateToPlayer()
+                                viewModel.playQueue(filteredTracks, index)
                             },
                             onRemove = { viewModel.removeTrackFromPlaylist(playlist.id, track.id) },
                             onChooseVersion = { viewModel.openVersionPicker(track) },

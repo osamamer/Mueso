@@ -296,7 +296,6 @@ fun ArtistDetailScreen(
                                 textSubColor = textSubColor,
                                 onClick = {
                                     viewModel.playArtistTopSongs(artistPage.topSongs, startIndex = index)
-                                    onNavigateToPlayer()
                                 }
                             )
                         }
@@ -363,7 +362,6 @@ fun ArtistDetailScreen(
                             cardBg = cardBg,
                             onVideoClick = { vid ->
                                 viewModel.playTrack(vid.toTrackEntity())
-                                onNavigateToPlayer()
                             }
                         )
                     }
@@ -381,7 +379,6 @@ fun ArtistDetailScreen(
                             cardBg = cardBg,
                             onVideoClick = { vid ->
                                 viewModel.playTrack(vid.toTrackEntity())
-                                onNavigateToPlayer()
                             }
                         )
                     }
